@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════════
+# Enterprise AI Assistant — API Dependencies
+# Python 3.12
+# ═══════════════════════════════════════════════════════════════════
+
+# ── Web Framework ────────────────────────────────────────────────
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+
+# ── Validation & Settings ────────────────────────────────────────
+pydantic==2.10.6
+pydantic-settings==2.7.1
+
+# ── Async HTTP Client (Ollama API) ───────────────────────────────
+# Правило 1: таймауты 120s прописаны в коде через httpx.Timeout
+httpx==0.28.1
+
+# ── Neo4j Graph DB ───────────────────────────────────────────────
+neo4j==5.28.0
+
+# ── Qdrant Vector DB ─────────────────────────────────────────────
+# Правило 3: Sparse Vectors (BM25) реализованы через fastembed
+qdrant-client==1.13.2
+
+# ── PostgreSQL ───────────────────────────────────────────────────
+asyncpg==0.30.0
+SQLAlchemy[asyncio]==2.0.38
+
+# ── Document Parsing (для ingestion-совместимых утилит) ──────────
+pypdf==5.1.0
+python-docx==1.1.2
+Pillow==11.1.0
+
+# ── Data Processing ──────────────────────────────────────────────
+pandas==2.2.3
+openpyxl==3.1.5
+
+# ── Sparse Embeddings (BM25 для Hybrid Search) ───────────────────
+# Правило 3: fastembed предоставляет SparseTextEmbedding("Qdrant/bm25")
+fastembed==0.4.2
+
+# ── Async File I/O ───────────────────────────────────────────────
+aiofiles==24.1.0
+
+# ── Email Validation ─────────────────────────────────────────────
+email-validator==2.2.0
+
+# ── Authentication (JWT + bcrypt) ────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# ── File Upload ──────────────────────────────────────────────────
+python-multipart==0.0.20
+
+# ── SSE Streaming ────────────────────────────────────────────────
+sse-starlette==2.2.1
+
+# ── Admin: Docker управление + системные метрики ─────────────────
+docker==7.1.0
+psutil==6.1.1

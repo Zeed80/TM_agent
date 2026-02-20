@@ -1,0 +1,101 @@
+# ═══════════════════════════════════════════════
+# Enterprise AI Assistant — .gitignore
+# ═══════════════════════════════════════════════
+
+# ── Конфигурация (секреты) ────────────────────
+.env
+.env.local
+.env.production
+*.pem
+*.key
+*.crt
+
+# ── Документы предприятия (данные не публикуются) ──
+documents/
+!documents/.gitkeep
+
+# ── Python ───────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.log
+
+# ── Node.js / Frontend ────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/build/
+.npm
+.yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Docker volumes / данные сервисов ─────────
+# (эти пути если вдруг смонтированы локально)
+data/
+volumes/
+pgdata/
+neo4j_data/
+qdrant_storage/
+ollama_models/
+caddy_data/
+caddy_config/
+
+# ── OpenClaw ─────────────────────────────────
+openclaw/workspace/credentials/
+openclaw/*.json
+!openclaw/workspace/**
+
+# ── Резервные копии ────────────────────────
+backups/
+*.sql.gz
+*.dump
+
+# ── OS ───────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── IDE ──────────────────────────────────────
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# ── Временные файлы ───────────────────────────
+*.tmp
+*.bak
+*.orig
+tmp/
+temp/
+
+# ── Модели и тяжёлые данные ───────────────────
+*.gguf
+*.bin
+*.safetensors
+models/

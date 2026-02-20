@@ -1,0 +1,45 @@
+# ═══════════════════════════════════════════════════════════════════
+# Enterprise AI Assistant — Ingestion Dependencies
+# Python 3.12
+# ═══════════════════════════════════════════════════════════════════
+
+# ── Async HTTP Client (Ollama API для VLM и Embedding) ───────────
+httpx==0.28.1
+
+# ── Validation ───────────────────────────────────────────────────
+pydantic==2.10.6
+pydantic-settings==2.7.1
+
+# ── Neo4j Graph DB ───────────────────────────────────────────────
+neo4j==5.28.0
+
+# ── Qdrant Vector DB ─────────────────────────────────────────────
+qdrant-client==1.13.2
+
+# ── PostgreSQL ───────────────────────────────────────────────────
+asyncpg==0.30.0
+SQLAlchemy[asyncio]==2.0.38
+
+# ── Document Parsing ─────────────────────────────────────────────
+pypdf==5.1.0           # PDF → текст
+python-docx==1.1.2     # DOCX → текст
+Pillow==11.1.0         # Изображения чертежей (PNG/JPEG → base64 для VLM)
+
+# ── Data Processing ──────────────────────────────────────────────
+pandas==2.2.3          # Excel/CSV → DataFrame → PostgreSQL
+openpyxl==3.1.5        # Чтение .xlsx
+
+# ── Sparse Embeddings (BM25 для Hybrid Search) ───────────────────
+fastembed==0.4.2
+
+# ── Async File I/O ───────────────────────────────────────────────
+aiofiles==24.1.0
+
+# ── Email Parsing (.eml файлы) ────────────────────────────────────
+chardet==5.2.0
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# ── CLI / Progress ───────────────────────────────────────────────
+tqdm==4.67.1
+click==8.1.8

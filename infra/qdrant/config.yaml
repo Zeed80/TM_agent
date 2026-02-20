@@ -1,0 +1,49 @@
+# ═══════════════════════════════════════════════════════════════════
+# Qdrant Production Configuration — Enterprise AI Assistant
+# Документация: https://qdrant.tech/documentation/guides/configuration/
+# ═══════════════════════════════════════════════════════════════════
+
+storage:
+  # Путь к хранилищу (внутри контейнера, mapped на volume)
+  storage_path: /qdrant/storage
+
+  # Полезная нагрузка (метаданные чанков) хранится на диске, а не в RAM.
+  # Экономит оперативную память при большом количестве документов.
+  on_disk_payload: true
+
+  # Параметры HNSW-индекса для Dense Vectors
+  hnsw_index:
+    m: 16             # Количество связей на узел (больше = лучше recall, больше памяти)
+    ef_construct: 100 # Качество построения индекса при загрузке
+
+  # Хранить WAL (Write-Ahead Log) для надёжности записей
+  wal:
+    wal_capacity_mb: 32
+
+  # Параметры производительности
+  performance:
+    max_search_threads: 4     # Параллельность поиска (Ryzen 9 9900X хорошо справится)
+    max_optimization_threads: 2
+
+service:
+  host: 0.0.0.0
+  http_port: 6333
+  grpc_port: 6334
+
+  # Разрешить CORS для WebUI/API-клиентов в той же сети
+  enable_cors: true
+
+  # Максимальный размер запроса (для загрузки большого количества векторов за раз)
+  max_request_size_mb: 256
+
+  # Таймаут запроса (секунды)
+  grpc_timeout_ms: 120000
+
+cluster:
+  enabled: false   # Одна нода, кластеризация не нужна
+
+# Логирование
+log_level: INFO
+
+# Отключить телеметрию (air-gapped окружение)
+telemetry_disabled: true

@@ -1,0 +1,347 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # OLLAMA GPU — LLM (qwen3:30b) + VLM (qwen3-vl:14b)
+  # Эксклюзивный доступ к VRAM. Модели переключаются
+  # через VRAMManager с asyncio.Lock (правило 1).
+  # ─────────────────────────────────────────────
+  ollama-gpu:
+    image: ollama/ollama:latest
+    container_name: ollama-gpu
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_gpu_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MAX_LOADED_MODELS=1      # Только одна модель в VRAM
+      - OLLAMA_KEEP_ALIVE=-1            # Модели не выгружаются автоматически
+      - OLLAMA_NUM_PARALLEL=1           # Один запрос за раз (VRAM ограничен)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # OLLAMA CPU — Embedding (qwen3-embedding) + Reranker (qwen3-reranker)
+  # Работает ТОЛЬКО на CPU (без GPU device allocation).
+  # AMD Ryzen 9 9900X справляется с batch-эмбеддингами.
+  # ─────────────────────────────────────────────
+  ollama-cpu:
+    image: ollama/ollama:latest
+    container_name: ollama-cpu
+    restart: unless-stopped
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_cpu_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - CUDA_VISIBLE_DEVICES=""         # Явно отключаем GPU для этого инстанса
+      - OLLAMA_MAX_LOADED_MODELS=2      # Embedding + Reranker одновременно в RAM
+      - OLLAMA_KEEP_ALIVE=-1
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # QDRANT — Векторная БД для документов
+  # Hybrid Search: Sparse (BM25) + Dense vectors (правило 3)
+  # ─────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.13.6
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./infra/qdrant/config.yaml:/qdrant/config/production.yaml:ro
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # NEO4J — Граф знаний завода
+  # Узлы: Деталь, Станок, Инструмент, Техпроцесс и т.д.
+  # ─────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # HTTP Browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - ./infra/neo4j/init.cypher:/var/lib/neo4j/import/init.cypher:ro
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=2G
+      - NEO4J_server_memory_pagecache_size=1G
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7474 > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ─────────────────────────────────────────────
+  # POSTGRESQL — Склад, номенклатура, справочники
+  # Таблицы: tools_catalog, metals_catalog, polymers_catalog,
+  # inventory, employees
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/01_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - enterprise-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ─────────────────────────────────────────────
+  # API — Python FastAPI микросервис
+  # Обрабатывает 4 навыка + Web API (auth, chat, files, status)
+  # src/ монтируется как volume → uvicorn --reload
+  # (изменение кода = мгновенная перезагрузка без rebuild)
+  # ─────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: api
+    restart: unless-stopped
+    # Порт НЕ публикуем наружу — доступен только через nginx
+    expose:
+      - "8000"
+    volumes:
+      - ./api/src:/app/src                  # Горячая перезагрузка без rebuild
+      - ./documents:/app/documents          # Документы (RW — для загрузки через Web UI)
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket для admin panel
+    environment:
+      - OLLAMA_GPU_URL=http://ollama-gpu:11434
+      - OLLAMA_CPU_URL=http://ollama-cpu:11434
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - POSTGRES_DSN=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:30b}
+      - VLM_MODEL=${VLM_MODEL:-qwen3-vl:14b}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding}
+      - RERANKER_MODEL=${RERANKER_MODEL:-qwen3-reranker}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-4096}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-documents}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - SERVER_HOST=${SERVER_HOST:-localhost}
+    networks:
+      - enterprise-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama-gpu:
+        condition: service_healthy
+      ollama-cpu:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  # ─────────────────────────────────────────────
+  # FRONTEND — React SPA (Vite, hot-reload в dev)
+  # src/ монтируется как volume → Vite HMR без rebuild
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    volumes:
+      - ./frontend/src:/app/src             # Vite HMR — изменения без rebuild
+      - ./frontend/public:/app/public
+    networks:
+      - enterprise-net
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # CADDY — HTTPS Reverse Proxy с автоматическим TLS
+  # Порт 443 (HTTPS, Let's Encrypt или self-signed) + 80 → redirect
+  # SERVER_HOST = домен → auto Let's Encrypt (без предупреждений)
+  # SERVER_HOST = IP    → tls internal (self-signed)
+  # ─────────────────────────────────────────────
+  caddy:
+    build:
+      context: ./infra/caddy
+      dockerfile: Dockerfile
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data          # Сертификаты Let's Encrypt (постоянные)
+      - caddy_config:/config      # Конфиг Caddy
+    environment:
+      - SERVER_HOST=${SERVER_HOST:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    networks:
+      - enterprise-net
+    depends_on:
+      - frontend
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ > /dev/null 2>&1 || exit 0"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  # ─────────────────────────────────────────────
+  # OPENCLAW — AI Agent (Node.js 22)
+  # Подключается к Telegram, управляет навыками через bash+curl
+  # workspace/ монтируется как volume → SKILL.md редактируются
+  # без rebuild контейнера
+  # OPENCLAW_AUTO_UPDATE=true — автообновление при рестарте
+  # ─────────────────────────────────────────────
+  openclaw:
+    build:
+      context: ./openclaw/docker
+      dockerfile: Dockerfile
+    container_name: openclaw
+    restart: unless-stopped
+    ports:
+      - "18789:18789"
+    volumes:
+      - ./openclaw/workspace:/root/.openclaw/workspace   # SOUL.md, AGENTS.md, skills/
+      - ./openclaw/openclaw.json:/root/.openclaw/openclaw.json
+      - openclaw_data:/root/.openclaw/credentials        # Токены мессенджеров
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - OPENCLAW_AUTO_UPDATE=${OPENCLAW_AUTO_UPDATE:-false}
+    networks:
+      - enterprise-net
+    depends_on:
+      api:
+        condition: service_healthy
+      ollama-gpu:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:18789/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # INGESTION — ETL-скрипты (разовый запуск через profile)
+  # Запуск: docker compose --profile ingestion run --rm ingestion ...
+  # ─────────────────────────────────────────────
+  ingestion:
+    build:
+      context: ./ingestion
+      dockerfile: Dockerfile
+    container_name: ingestion
+    profiles: ["ingestion"]
+    volumes:
+      - ./ingestion/src:/app/src              # Код монтируется для быстрых правок
+      - ./documents:/app/documents:ro
+    environment:
+      - OLLAMA_GPU_URL=http://ollama-gpu:11434
+      - OLLAMA_CPU_URL=http://ollama-cpu:11434
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - POSTGRES_DSN=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:30b}
+      - VLM_MODEL=${VLM_MODEL:-qwen3-vl:14b}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-qwen3-embedding}
+      - RERANKER_MODEL=${RERANKER_MODEL:-qwen3-reranker}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-4096}
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-documents}
+    networks:
+      - enterprise-net
+    depends_on:
+      - neo4j
+      - qdrant
+      - postgres
+      - ollama-gpu
+      - ollama-cpu
+
+networks:
+  enterprise-net:
+    driver: bridge
+
+volumes:
+  ollama_gpu_data:      # Веса GPU-моделей (qwen3:30b, qwen3-vl:14b)
+  ollama_cpu_data:      # Веса CPU-моделей (embedding, reranker)
+  qdrant_data:          # Индексы и векторы Qdrant
+  neo4j_data:           # Граф Neo4j
+  neo4j_logs:           # Логи Neo4j
+  pg_data:              # Данные PostgreSQL
+  openclaw_data:        # Учётные данные мессенджеров (токены)
+  caddy_data:
+  caddy_config:            # Самоподписанный TLS-сертификат (генерируется 1 раз)
