@@ -37,6 +37,22 @@ CREATE CONSTRAINT techprocess_id_unique IF NOT EXISTS
 CREATE CONSTRAINT operation_id_unique IF NOT EXISTS
   FOR (n:Operation) REQUIRE n.id IS UNIQUE;
 
+// Операции изготовления (из blueprint_ingestion)
+CREATE CONSTRAINT mfg_operation_id_unique IF NOT EXISTS
+  FOR (n:ManufacturingOperation) REQUIRE n.id IS UNIQUE;
+
+// Типы инструмента (из blueprint_ingestion)
+CREATE CONSTRAINT tool_type_id_unique IF NOT EXISTS
+  FOR (n:ToolType) REQUIRE n.id IS UNIQUE;
+
+// Виды поверхностной обработки (из blueprint_ingestion)
+CREATE CONSTRAINT surface_treatment_id_unique IF NOT EXISTS
+  FOR (n:SurfaceTreatment) REQUIRE n.id IS UNIQUE;
+
+// Виды термообработки (из blueprint_ingestion)
+CREATE CONSTRAINT heat_treatment_id_unique IF NOT EXISTS
+  FOR (n:HeatTreatment) REQUIRE n.id IS UNIQUE;
+
 // ───────────────────────────────────────────────────────────────────
 // ДОПОЛНИТЕЛЬНЫЕ ИНДЕКСЫ для частых поисков
 // ───────────────────────────────────────────────────────────────────
@@ -51,6 +67,25 @@ CREATE INDEX drawing_number_idx IF NOT EXISTS
 
 CREATE INDEX drawing_revision_idx IF NOT EXISTS
   FOR (n:Drawing) ON (n.revision);
+
+// Поиск чертежа по пути файла (основной lookup для blueprint-vision)
+CREATE INDEX drawing_file_path_idx IF NOT EXISTS
+  FOR (n:Drawing) ON (n.file_path);
+
+// Поиск операций по типу
+CREATE INDEX mfg_operation_name_idx IF NOT EXISTS
+  FOR (n:ManufacturingOperation) ON (n.name);
+
+// Поиск типов инструмента
+CREATE INDEX tool_type_name_idx IF NOT EXISTS
+  FOR (n:ToolType) ON (n.name);
+
+// Поиск по типу обработки
+CREATE INDEX surface_treatment_type_idx IF NOT EXISTS
+  FOR (n:SurfaceTreatment) ON (n.type);
+
+CREATE INDEX heat_treatment_type_idx IF NOT EXISTS
+  FOR (n:HeatTreatment) ON (n.type);
 
 // Поиск пресс-формы по номеру
 CREATE INDEX mold_number_idx IF NOT EXISTS
@@ -90,7 +125,10 @@ CREATE INDEX material_grade_idx IF NOT EXISTS
 // ───────────────────────────────────────────────────────────────────
 
 CREATE FULLTEXT INDEX part_fulltext_idx IF NOT EXISTS
-  FOR (n:Part) ON EACH [n.name, n.drawing_number];
+  FOR (n:Part) ON EACH [n.name, n.drawing_number, n.technical_requirements];
+
+CREATE FULLTEXT INDEX mfg_operation_fulltext_idx IF NOT EXISTS
+  FOR (n:ManufacturingOperation) ON EACH [n.name, n.description];
 
 CREATE FULLTEXT INDEX machine_fulltext_idx IF NOT EXISTS
   FOR (n:Machine) ON EACH [n.name, n.model];
