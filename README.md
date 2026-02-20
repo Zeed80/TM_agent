@@ -483,7 +483,6 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
 <div align="center">
 
-**Сделано с ❤ для производственных предприятий России**
 
 [⭐ Поставить звезду](https://github.com/Zeed80/TM_agent) · [🐛 Сообщить о проблеме](https://github.com/Zeed80/TM_agent/issues) · [💡 Предложить улучшение](https://github.com/Zeed80/TM_agent/issues)
 
