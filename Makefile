@@ -88,7 +88,7 @@ restart-caddy: ## Перезапустить Caddy (обновить конфи�
 create-admin: ## Создать/обновить пользователя admin (запрашивает пароль)
 	@read -sp "Пароль для admin: " PASS && echo "" && \
 	HASH=$$(docker compose exec -T api python3 -c \
-	  "from passlib.context import CryptContext; ctx=CryptContext(schemes=['bcrypt']); print(ctx.hash('$$PASS'))") && \
+	  "import bcrypt,sys; p=sys.argv[1].encode('utf-8')[:72]; print(bcrypt.hashpw(p,bcrypt.gensalt()).decode())" "$$PASS") && \
 	docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" -c \
 	  "INSERT INTO users (username, full_name, password_hash, role) \
 	   VALUES ('admin','Администратор','$$HASH','admin') \

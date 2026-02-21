@@ -10,35 +10,40 @@ import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID  # noqa: F401 — используется в аннотациях
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from src.config import settings
 from src.db.postgres_client import postgres_client
 
 logger = logging.getLogger(__name__)
 
-# ── Контекст bcrypt ────────────────────────────────────────────────────
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt ограничивает пароль 72 байтами
+_BCRYPT_MAX_PASSWORD_BYTES = 72
 
 # ── Bearer-схема (не auto_error — чтобы сами формировали 401) ─────────
 _bearer_scheme = HTTPBearer(auto_error=False)
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Утилиты паролей
+# Утилиты паролей (bcrypt напрямую — без passlib из-за несовместимости с bcrypt 4.1+)
 # ─────────────────────────────────────────────────────────────────────
 
 def hash_password(plain_password: str) -> str:
     """Создаёт bcrypt-хэш пароля."""
-    return _pwd_context.hash(plain_password)
+    pwd_bytes = plain_password.encode("utf-8")[: _BCRYPT_MAX_PASSWORD_BYTES]
+    return bcrypt.hashpw(pwd_bytes, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверяет пароль против bcrypt-хэша."""
-    return _pwd_context.verify(plain_password, hashed_password)
+    try:
+        pwd_bytes = plain_password.encode("utf-8")[: _BCRYPT_MAX_PASSWORD_BYTES]
+        return bcrypt.checkpw(pwd_bytes, hashed_password.encode("utf-8"))
+    except Exception:
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────
