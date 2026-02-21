@@ -98,7 +98,7 @@ services:
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
-      - ./infra/neo4j/init.cypher:/var/lib/neo4j/import/init.cypher:ro
+      - ./infra/neo4j/init.cypher:/var/lib/neo4j/import/init.cypher
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       - NEO4J_server_memory_heap_initial__size=512m
