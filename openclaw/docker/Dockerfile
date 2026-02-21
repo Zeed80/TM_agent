@@ -10,6 +10,7 @@ ENV HOME=/root \
     GIT_TERMINAL_PROMPT=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
         curl \
         jq \
         git \
