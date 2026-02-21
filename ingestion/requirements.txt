@@ -23,7 +23,8 @@ SQLAlchemy[asyncio]==2.0.38
 # ── Document Parsing ─────────────────────────────────────────────
 pypdf==5.1.0           # PDF → текст
 python-docx==1.1.2     # DOCX → текст
-Pillow==11.1.0         # Изображения чертежей (PNG/JPEG → base64 для VLM)
+# Pillow: fastembed==0.4.2 требует <11.0.0 — используем последнюю совместимую
+Pillow==10.4.0         # Изображения чертежей (PNG/JPEG → base64 для VLM)
 
 # ── Data Processing ──────────────────────────────────────────────
 pandas==2.2.3          # Excel/CSV → DataFrame → PostgreSQL
