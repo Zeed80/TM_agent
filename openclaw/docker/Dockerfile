@@ -9,11 +9,15 @@ FROM node:22-slim
 ENV HOME=/root \
     GIT_TERMINAL_PROMPT=0
 
+# python3 + build-essential нужны для node-gyp: @discordjs/opus не имеет prebuild под Node 22,
+# npm собирает его из исходников.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         jq \
         git \
+        python3 \
+        build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Зависимости openclaw (@whiskeysockets/baileys → libsignal-node) тянутся по ssh:// —
