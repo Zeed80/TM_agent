@@ -99,3 +99,6 @@ temp/
 *.bin
 *.safetensors
 models/
+# Исключение: папка api/src/models — это Pydantic-модели API, а не веса/артефакты
+!api/src/models/
+!api/src/models/**
