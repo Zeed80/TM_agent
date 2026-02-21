@@ -5,6 +5,7 @@
 #
 # Использование:
 #   chmod +x install.sh && sudo bash install.sh
+#   sudo bash install.sh --teardown   — полная очистка (контейнеры, volumes, образы проекта)
 #
 # Что делает скрипт:
 #   1. Проверяет и устанавливает Docker Engine + Compose
@@ -106,6 +107,22 @@ fi
 # ── Рабочая директория ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# ── Режим полной очистки (без установки) ───────────────────────────────
+if [[ "${1:-}" == "--teardown" ]]; then
+  log_header "Полная очистка проекта (teardown)"
+  if [[ ! -f docker-compose.yml ]]; then
+    die "docker-compose.yml не найден. Запускайте из корня проекта."
+  fi
+  echo "Будет удалено: контейнеры, сети, volumes, образы tm_agent-*"
+  if ! confirm "Выполнить полную очистку?"; then
+    echo "Отменено."
+    exit 0
+  fi
+  docker compose down -v --rmi local --remove-orphans
+  log_ok "Teardown завершён. Для установки заново запустите: sudo bash install.sh"
+  exit 0
+fi
 
 # ─────────────────────────────────────────────────────────────────────
 log_header "Enterprise AI Assistant — Автоматическая установка"
@@ -499,5 +516,6 @@ echo -e "  ${CYAN}make status${NC}       — статус сервисов и UR
 echo -e "  ${CYAN}make logs${NC}         — логи всех сервисов"
 echo -e "  ${CYAN}make update${NC}       — обновление до последней версии"
 echo -e "  ${CYAN}make down${NC}         — остановка всех сервисов"
+echo -e "  ${CYAN}make teardown${NC}     — полная очистка (контейнеры, volumes, образы); чистый старт"
 echo -e "  ${CYAN}make create-admin${NC} — сброс пароля admin"
 echo

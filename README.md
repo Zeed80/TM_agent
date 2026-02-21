@@ -303,8 +303,23 @@ make update-api      # Пересобрать только API
 make backup-pg       # Дамп PostgreSQL
 make create-admin    # Сбросить пароль admin
 make down            # Остановить всё
-make clean           # Удалить все данные (необратимо!)
+make clean           # Удалить контейнеры и volumes (данные — необратимо!)
+make teardown        # Полная очистка: контейнеры, volumes, образы проекта (чистый старт)
 ```
+
+### Чистая переустановка
+
+Если после частых переустановок контейнеры не поднимаются (unhealthy, dependency failed), сделай полный сброс:
+
+```bash
+make teardown        # подтверди вводом yes
+# Затем заново поднять и при необходимости пересобрать образы:
+make up              # или: docker compose build && docker compose up -d
+make pull-models     # при первом запуске
+make init-db        # при первом запуске
+```
+
+`teardown` удаляет контейнеры, сети, все volumes и образы проекта (tm_agent-api, tm_agent-frontend и т.д.). Базовые образы (postgres, neo4j, qdrant, ollama) при следующем `make up` подтянутся заново.
 
 ---
 

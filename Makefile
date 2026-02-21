@@ -12,7 +12,7 @@ SHELL := /bin/bash
         ingest-excel ingest-pdf ingest-blueprints ingest-techprocess ingest-all \
         shell-api shell-neo4j shell-pg shell-qdrant \
         create-admin status \
-        backup-pg restore-pg clean
+        backup-pg restore-pg clean teardown
 
 # Загружаем переменные из .env для использования в make-командах
 -include .env
@@ -200,11 +200,23 @@ restore-pg: ## Восстановить PostgreSQL из файла: make restore
 # Очистка
 # ──────────────────────────────────────────────
 
-clean: ## Остановить контейнеры и удалить ВСЕ данные (volumes)! Необратимо!
+clean: ## Остановить контейнеры и удалить ВСЕ данные (volumes). Необратимо!
 	@echo "ВНИМАНИЕ: Это удалит все данные (Neo4j, PostgreSQL, Qdrant, модели Ollama)!"
 	@read -p "Ты уверен? Напечатай 'yes': " confirm && [ "$$confirm" = "yes" ] || exit 1
-	docker compose down -v
-	@echo "✓ Все данные удалены"
+	docker compose down -v --remove-orphans
+	@echo "✓ Контейнеры и volumes удалены"
+
+# Полное удаление: контейнеры, сети, volumes + образы проекта (api, frontend, caddy, openclaw, ingestion).
+# После teardown заново: make up (подтянет базовые образы) + make build или install.sh для своих образов.
+teardown: ## Полная очистка: контейнеры, volumes, образы проекта. Чистый старт.
+	@echo "ВНИМАНИЕ: Будет удалено:"
+	@echo "  — все контейнеры и сети проекта"
+	@echo "  — все volumes (БД, Qdrant, Ollama, Caddy, OpenClaw)"
+	@echo "  — образы tm_agent-* (api, frontend, caddy, openclaw, ingestion)"
+	@echo "После этого нужны: make up (базовые образы) и пересборка своих: docker compose build"
+	@read -p "Продолжить? Напечатай 'yes': " confirm && [ "$$confirm" = "yes" ] || exit 1
+	docker compose down -v --rmi local --remove-orphans
+	@echo "✓ Teardown завершён. Для запуска с нуля: make up (или docker compose build && docker compose up -d)"
 
 # ──────────────────────────────────────────────
 # Help
