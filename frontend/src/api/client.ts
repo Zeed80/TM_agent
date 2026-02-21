@@ -55,12 +55,13 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    let detail = ''
+    const text = await res.text()
+    let detail = text
     try {
-      const errData = await res.json()
-      detail = errData.detail || JSON.stringify(errData)
+      const errData = JSON.parse(text)
+      detail = errData.detail ?? (typeof errData === 'string' ? errData : JSON.stringify(errData))
     } catch {
-      detail = await res.text()
+      /* оставляем detail = text */
     }
     throw new ApiError(res.status, `HTTP ${res.status}`, detail)
   }

@@ -8,7 +8,7 @@ SHELL := /bin/bash
 .PHONY: help up down restart ps logs logs-all logs-caddy logs-api logs-gpu \
         update update-openclaw update-api update-frontend \
         restart-caddy \
-        init-db init-qdrant pull-models \
+        init-db init-pg init-qdrant pull-models \
         ingest-excel ingest-pdf ingest-blueprints ingest-techprocess ingest-all \
         shell-api shell-neo4j shell-pg shell-qdrant \
         create-admin status \
@@ -107,6 +107,11 @@ init-db: ## Инициализировать схему Neo4j (constraints + ind
 		--non-interactive \
 		-f /var/lib/neo4j/import/init.cypher
 	@echo "✓ Схема Neo4j инициализирована"
+
+init-pg: ## Применить схему users/chat (02_users.sql) к существующей БД. Нужно после teardown или если таблицы users нет.
+	@echo "→ Применение схемы users, chat_sessions, chat_messages, uploaded_files..."
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/02_users.sql
+	@echo "✓ Схема PostgreSQL (users) применена. Создай admin: make create-admin"
 
 init-qdrant: ## Создать коллекцию Qdrant с Sparse + Dense векторами
 	@echo "→ Инициализация коллекции Qdrant..."

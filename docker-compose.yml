@@ -132,6 +132,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./infra/postgres/01_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./infra/postgres/02_users.sql:/docker-entrypoint-initdb.d/02_users.sql:ro
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
