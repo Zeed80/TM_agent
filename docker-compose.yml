@@ -110,8 +110,9 @@ services:
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
     networks:
       - enterprise-net
+    # Проверка через bash + /dev/tcp (в образе может не быть curl)
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:7474 > /dev/null || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/7474 && echo -e 'GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3"]
       interval: 15s
       timeout: 10s
       retries: 10
