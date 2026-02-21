@@ -13,7 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Установить OpenClaw глобально
-RUN npm install -g openclaw@latest
+# Retry + увеличенный timeout на случай медленного npm registry
+RUN npm config set fetch-timeout 300000 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm config set fetch-retries 5 \
+ && npm install -g openclaw@latest \
+ && openclaw --version
 
 # Скопировать entrypoint-скрипт
 COPY entrypoint.sh /entrypoint.sh

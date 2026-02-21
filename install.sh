@@ -333,19 +333,53 @@ log_ok "Директории созданы: documents/{blueprints,manuals,gosts
 # ── Шаг 7: Сборка и запуск ────────────────────────────────────────────
 log_step "Сборка Docker-образов и запуск сервисов"
 
-log_info "Собираем образы (первый раз может занять 5-10 минут)..."
-docker compose build --quiet 2>&1 | tail -5
+# Сборка основных сервисов (без OpenClaw — он опциональный и зависит от npm)
+log_info "Собираем основные образы: api, frontend, caddy, ingestion..."
+log_info "(Прогресс выводится ниже — первый раз занимает 5-15 минут)"
+echo ""
 
+if docker compose build api frontend caddy ingestion 2>&1; then
+  log_ok "Основные образы собраны"
+else
+  log_error "Ошибка сборки основных образов!"
+  log_error "Запустите вручную для диагностики: docker compose build api"
+  exit 1
+fi
+
+# OpenClaw (Telegram агент) — опциональный сервис
+# Собирается отдельно т.к. требует доступа к npm registry
+echo ""
+log_info "Собираем OpenClaw (Telegram агент)..."
+log_info "Если нет токена Telegram или недоступен npm — это можно пропустить."
+if docker compose build openclaw 2>&1; then
+  log_ok "OpenClaw собран"
+  _OPENCLAW_OK=true
+else
+  log_warn "OpenClaw не собрался (возможно недоступен npm registry)."
+  log_warn "Веб-интерфейс работает БЕЗ OpenClaw. Telegram-бот будет недоступен."
+  log_warn "Для повторной сборки позже: make update-openclaw"
+  _OPENCLAW_OK=false
+fi
+
+# Запуск (без openclaw если не собрался)
+echo ""
 log_info "Запускаем сервисы..."
-docker compose up -d --remove-orphans
+if [[ "${_OPENCLAW_OK:-false}" == "true" ]]; then
+  docker compose up -d --remove-orphans
+else
+  # Запускаем всё кроме openclaw
+  docker compose up -d --remove-orphans \
+    postgres neo4j qdrant ollama-gpu ollama-cpu api frontend caddy
+fi
 
-log_info "Ожидаем готовности сервисов (до 120 секунд)..."
+log_info "Ожидаем готовности API (до 120 секунд)..."
 WAIT=0
 until docker compose ps --status=running | grep -q "api" 2>/dev/null && \
       docker inspect api --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy"; do
   WAIT=$((WAIT+5))
   if [[ $WAIT -ge 120 ]]; then
-    log_warn "API сервис не стал healthy за 120 секунд. Продолжаем..."
+    log_warn "API сервис не стал healthy за 120 секунд."
+    log_warn "Проверьте: docker compose logs api"
     break
   fi
   echo -n "."
@@ -468,13 +502,20 @@ echo -e "${BOLD}Учётные данные администратора:${NC}"
 echo -e "  Логин:  ${CYAN}${ADMIN_USERNAME:-admin}${NC}"
 echo -e "  Пароль: ${CYAN}(указанный при установке)${NC}"
 echo
+if [[ "${_OPENCLAW_OK:-false}" != "true" ]]; then
+  echo -e "${YELLOW}⚠  OpenClaw (Telegram) не установлен.${NC}"
+  echo -e "${YELLOW}   Веб-интерфейс работает полностью. Для Telegram позже:${NC}"
+  echo -e "${YELLOW}   ${CYAN}make update-openclaw${NC}"
+  echo
+fi
+
 echo -e "${BOLD}Следующие шаги:${NC}"
 echo -e "  1. Откройте ${CYAN}${ACCESS_URL}${NC} и войдите"
 echo -e "  2. Загрузите AI-модели: ${CYAN}make pull-models${NC}"
 echo -e "     (или через Admin panel → 'Загрузить модель Ollama')"
 echo -e "  3. Загрузите документы через веб-интерфейс (раздел Документы)"
 echo -e "  4. Запустите индексацию: через Admin panel или ${CYAN}make ingest-all${NC}"
-echo -e "  5. (опционально) Telegram: ${CYAN}make openclaw-pair${NC}"
+echo -e "  5. (опционально) Telegram: ${CYAN}make update-openclaw && make openclaw-pair${NC}"
 echo
 echo -e "${BOLD}Управление из браузера:${NC}"
 echo -e "  ${CYAN}${ACCESS_URL}/admin${NC}  — контейнеры, логи, метрики, модели"
