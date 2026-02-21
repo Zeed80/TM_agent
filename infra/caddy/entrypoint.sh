@@ -58,9 +58,7 @@ ${SERVER_HOST} {
     header_up X-Forwarded-For  {remote_host}
     header_up X-Forwarded-Proto {scheme}
     transport http {
-      # Увеличенный timeout для SSE-стриминга (правило 1: 120s+)
       response_header_timeout 3m
-      read_buffer_size         16384
     }
   }
 
@@ -81,4 +79,3 @@ echo "[Caddy] Caddyfile сгенерирован:"
 cat /etc/caddy/Caddyfile
 
 exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-CADDYEOF
