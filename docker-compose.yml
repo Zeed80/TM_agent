@@ -77,12 +77,13 @@ services:
       - ./infra/qdrant/config.yaml:/qdrant/config/production.yaml:ro
     networks:
       - enterprise-net
+    # В образе Qdrant нет curl — проверяем через bash + /dev/tcp; GET / возвращает 200 при готовности
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz > /dev/null || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 15s
 
   # ─────────────────────────────────────────────
   # NEO4J — Граф знаний завода

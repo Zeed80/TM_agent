@@ -20,18 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Зависимости openclaw (@whiskeysockets/baileys → libsignal-node) тянутся по ssh:// —
-# в образе нет SSH-ключей. Записываем .gitconfig вручную и ставим openclaw в ОДНОМ RUN,
-# чтобы git точно использовал HTTPS при вызове из npm.
+# Зависимости openclaw тянутся по git; в образе нет SSH — используем HTTPS через .gitconfig.
 RUN mkdir -p /root/.ssh \
  && printf '[url "https://github.com/"]\n\tinsteadOf = ssh://git@github.com/\n\tinsteadOf = git@github.com:\n' >> /root/.gitconfig \
- && (git config --global --list | grep -E 'url\.|insteadOf' || true) \
- && unset GIT_SSH_COMMAND \
  && npm config set fetch-timeout 300000 \
  && npm config set fetch-retry-mintimeout 20000 \
  && npm config set fetch-retry-maxtimeout 120000 \
- && npm config set fetch-retries 5 \
- && npm install -g openclaw@latest \
+ && npm config set fetch-retries 5
+
+# Кэш npm между сборками (BuildKit): повторные сборки и обновления зависимостей быстрее.
+ARG OPENCLAW_VERSION=latest
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g "openclaw@${OPENCLAW_VERSION}" \
  && openclaw --version
 
 COPY entrypoint.sh /entrypoint.sh
