@@ -279,7 +279,7 @@ services:
       - "18789:18789"
     volumes:
       - ./openclaw/workspace:/root/.openclaw/workspace   # SOUL.md, AGENTS.md, skills/
-      - ./openclaw/openclaw.json:/root/.openclaw/openclaw.json
+      - ./openclaw:/opt/openclaw-config:ro              # конфиг: openclaw.json копируется в entrypoint (избегаем EISDIR при отсутствии файла на хосте)
       - openclaw_data:/root/.openclaw/credentials        # Токены мессенджеров
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}

@@ -1,10 +1,9 @@
 #!/bin/sh
 # ═══════════════════════════════════════════════════════════════════
 # OpenClaw Entrypoint
-# Если OPENCLAW_AUTO_UPDATE=true — обновляет OpenClaw до latest
-# перед запуском Gateway.
-# Если на хосте нет openclaw.json, Docker создаёт каталог вместо файла (EISDIR) —
-# заменяем каталог на конфиг по умолчанию.
+# OPENCLAW_AUTO_UPDATE=true — обновление до latest перед запуском.
+# Конфиг: /opt/openclaw-config (bind ./openclaw) → копируем openclaw.json
+# в /root/.openclaw/, чтобы не монтировать файл впрямую (на хосте его может не быть → EISDIR).
 # ═══════════════════════════════════════════════════════════════════
 
 set -e
@@ -17,15 +16,14 @@ else
     echo "[openclaw] Auto-update disabled. Version: $(openclaw --version 2>/dev/null || echo 'unknown')"
 fi
 
-CONFIG_PATH="/root/.openclaw/openclaw.json"
-if [ -d "$CONFIG_PATH" ]; then
-    echo "[openclaw] openclaw.json was a directory (bind mount without host file), replacing with default config"
-    rm -rf "$CONFIG_PATH"
-fi
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "[openclaw] Creating default openclaw.json"
-    mkdir -p /root/.openclaw
-    cat > "$CONFIG_PATH" << 'EOF'
+mkdir -p /root/.openclaw
+CONFIG_DEST="/root/.openclaw/openclaw.json"
+if [ -f /opt/openclaw-config/openclaw.json ]; then
+    echo "[openclaw] Using config from /opt/openclaw-config/openclaw.json"
+    cp /opt/openclaw-config/openclaw.json "$CONFIG_DEST"
+else
+    echo "[openclaw] No openclaw.json on host, using default config"
+    cat > "$CONFIG_DEST" << 'EOF'
 {"gateway":{"port":18789,"bind":"all"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"models":{"ollama":{"baseUrl":"http://ollama-gpu:11434"}},"channels":{"telegram":{"botToken":"","dmPolicy":"pairing"}},"commands":{"nativeSkills":"auto"}}
 EOF
 fi
