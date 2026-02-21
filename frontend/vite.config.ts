@@ -6,6 +6,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
+    // Доступ по домену (ptsai.ru) через Caddy — иначе Vite блокирует Host
+    allowedHosts: true,
     // В dev-режиме проксируем API-запросы к FastAPI
     // (при работе вне Docker для локальной разработки)
     proxy: {
