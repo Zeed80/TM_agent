@@ -6,14 +6,14 @@
 
 FROM node:22-slim
 
-# Установить curl (для curl-вызовов в SKILL.md) и jq (для парсинга JSON)
+# curl — для curl-вызовов в SKILL.md; jq — парсинг JSON; git — npm требует для некоторых зависимостей
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         jq \
+        git \
     && rm -rf /var/lib/apt/lists/*
 
-# Установить OpenClaw глобально
-# Retry + увеличенный timeout на случай медленного npm registry
+# Установить OpenClaw глобально (ключевой оркестратор по ТЗ)
 RUN npm config set fetch-timeout 300000 \
  && npm config set fetch-retry-mintimeout 20000 \
  && npm config set fetch-retry-maxtimeout 120000 \
