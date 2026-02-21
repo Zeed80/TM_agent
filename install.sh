@@ -44,6 +44,20 @@ log_header()  {
 
 die() { log_error "$*"; exit 1; }
 
+# Удаление ANSI-последовательностей и лишних переводов строк из ввода
+# (предотвращает ошибку ".env: line N: $'\E[1': command not found" при source .env)
+sanitize_env_value() {
+  printf '%s' "$1" | sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' -e 's/\x1b[=><]//g' -e 's/\r$//' -e '/^$/d' | tr -d '\n\r' | head -c 2000
+}
+
+# Экранирование значения для безопасной записи в .env (двойные кавычки)
+escape_env_value() {
+  local v="$1"
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  printf '"%s"' "$v"
+}
+
 confirm() {
   local prompt="${1:-Продолжить?}"
   read -rp "$(echo -e "${YELLOW}?${NC} ${prompt} [y/N]: ")" ans
@@ -212,7 +226,7 @@ if [[ "${_CONFIGURE:-false}" == "true" ]]; then
   echo -e "${YELLOW}Введите домен (ai.example.com) для Let's Encrypt (рекомендуется)${NC}"
   echo -e "${YELLOW}или IP-адрес сервера для self-signed сертификата.${NC}"
   DETECTED_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "")
-  SERVER_HOST=$(ask "Домен или IP сервера" "${DETECTED_IP}")
+  SERVER_HOST=$(sanitize_env_value "$(ask "Домен или IP сервера" "${DETECTED_IP}")")
 
   # Определяем, является ли значение IP-адресом
   if echo "$SERVER_HOST" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
@@ -224,25 +238,25 @@ if [[ "${_CONFIGURE:-false}" == "true" ]]; then
     IS_DOMAIN=true
     log_info "Режим: Let's Encrypt для домена ${SERVER_HOST}"
     echo -e "${YELLOW}Важно: домен должен уже указывать на этот сервер (DNS A-запись).${NC}"
-    ACME_EMAIL=$(ask "Email для Let's Encrypt уведомлений" "admin@${SERVER_HOST#*.}")
+    ACME_EMAIL=$(sanitize_env_value "$(ask "Email для Let's Encrypt уведомлений" "admin@${SERVER_HOST#*.}")")
   fi
 
   # ── Пароли баз данных ─────────────────────────────────────────────
   echo
   echo -e "${BOLD}Пароли баз данных:${NC}"
-  NEO4J_PASSWORD=$(ask_password "Пароль Neo4j")
-  POSTGRES_PASSWORD=$(ask_password "Пароль PostgreSQL")
+  NEO4J_PASSWORD=$(sanitize_env_value "$(ask_password "Пароль Neo4j")")
+  POSTGRES_PASSWORD=$(sanitize_env_value "$(ask_password "Пароль PostgreSQL")")
 
   # ── Пароль администратора веб-интерфейса ─────────────────────────
   echo
   echo -e "${BOLD}Учётная запись администратора веб-интерфейса:${NC}"
-  ADMIN_USERNAME=$(ask "Логин администратора" "admin")
-  ADMIN_FULLNAME=$(ask "Полное имя" "Администратор")
-  ADMIN_PASSWORD=$(ask_password "Пароль администратора")
+  ADMIN_USERNAME=$(sanitize_env_value "$(ask "Логин администратора" "admin")")
+  ADMIN_FULLNAME=$(sanitize_env_value "$(ask "Полное имя" "Администратор")")
+  ADMIN_PASSWORD=$(sanitize_env_value "$(ask_password "Пароль администратора")")
 
   # ── Telegram (опционально) ────────────────────────────────────────
   echo
-  TELEGRAM_TOKEN=$(ask "Токен Telegram-бота (@BotFather) [Enter = пропустить]" "")
+  TELEGRAM_TOKEN=$(sanitize_env_value "$(ask "Токен Telegram-бота (@BotFather) [Enter = пропустить]" "")")
   if [[ -z "$TELEGRAM_TOKEN" ]]; then
     TELEGRAM_TOKEN="123456789:AAAAAA_PLACEHOLDER_CHANGE_ME"
     log_warn "Telegram-токен не задан. OpenClaw Telegram-интеграция не будет работать."
@@ -259,7 +273,7 @@ if [[ "${_CONFIGURE:-false}" == "true" ]]; then
     CORS_ORIGINS="https://${SERVER_HOST}"
   fi
 
-  # ── Запись .env ───────────────────────────────────────────────────
+  # ── Запись .env (значения в кавычках — защита от ANSI и спецсимволов при source) ──
   cat > .env << ENVEOF
 # ═══════════════════════════════════════════
 # Enterprise AI Assistant — Конфигурация
@@ -267,13 +281,13 @@ if [[ "${_CONFIGURE:-false}" == "true" ]]; then
 # ═══════════════════════════════════════════
 
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=${NEO4J_PASSWORD}
+NEO4J_PASSWORD=$(escape_env_value "${NEO4J_PASSWORD}")
 
 POSTGRES_DB=enterprise_ai
 POSTGRES_USER=enterprise
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_PASSWORD=$(escape_env_value "${POSTGRES_PASSWORD}")
 
-TELEGRAM_BOT_TOKEN=${TELEGRAM_TOKEN}
+TELEGRAM_BOT_TOKEN=$(escape_env_value "${TELEGRAM_TOKEN}")
 
 LLM_MODEL=qwen3:30b
 VLM_MODEL=qwen3-vl:14b
@@ -287,13 +301,13 @@ OPENCLAW_AUTO_UPDATE=false
 
 # ── Web Interface ────────────────────────────────
 # SERVER_HOST: домен или IP для HTTPS
-SERVER_HOST=${SERVER_HOST}
+SERVER_HOST=$(escape_env_value "${SERVER_HOST}")
 # ACME_EMAIL: email для Let's Encrypt (только для доменов)
-ACME_EMAIL=${ACME_EMAIL}
+ACME_EMAIL=$(escape_env_value "${ACME_EMAIL}")
 
-JWT_SECRET_KEY=${JWT_SECRET}
+JWT_SECRET_KEY=$(escape_env_value "${JWT_SECRET}")
 JWT_EXPIRE_HOURS=24
-CORS_ORIGINS=${CORS_ORIGINS}
+CORS_ORIGINS=$(escape_env_value "${CORS_ORIGINS}")
 ENVEOF
 
   log_ok "Файл .env создан"
@@ -428,7 +442,7 @@ log_header "Установка завершена!"
 
 # Получаем SERVER_HOST из .env если не в переменной
 if [[ -z "${SERVER_HOST:-}" ]] && [[ -f ".env" ]]; then
-  SERVER_HOST=$(grep '^SERVER_HOST=' .env | cut -d'=' -f2)
+  SERVER_HOST=$(grep '^SERVER_HOST=' .env | cut -d'=' -f2- | sed 's/^"//;s/"$//')
 fi
 SERVER_HOST="${SERVER_HOST:-$(hostname -I | awk '{print $1}')}"
 ACCESS_URL="https://${SERVER_HOST}"
