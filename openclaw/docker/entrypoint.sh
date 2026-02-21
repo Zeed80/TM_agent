@@ -22,9 +22,9 @@ if [ -f /opt/openclaw-config/openclaw.json ]; then
     echo "[openclaw] Using config from /opt/openclaw-config/openclaw.json"
     cp /opt/openclaw-config/openclaw.json "$CONFIG_DEST"
 else
-    echo "[openclaw] No openclaw.json on host, using default config"
+    echo "[openclaw] No openclaw.json on host, using default config (OpenClaw 2026 schema)"
     cat > "$CONFIG_DEST" << 'EOF'
-{"gateway":{"port":18789,"bind":"all"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"models":{"ollama":{"baseUrl":"http://ollama-gpu:11434"}},"channels":{"telegram":{"botToken":"","dmPolicy":"pairing"}},"commands":{"nativeSkills":"auto"}}
+{"gateway":{"port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":true,"botToken":"","dmPolicy":"pairing"}}}
 EOF
 fi
 
