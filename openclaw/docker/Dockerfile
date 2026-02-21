@@ -6,12 +6,18 @@
 
 FROM node:22-slim
 
-# curl — для curl-вызовов в SKILL.md; jq — парсинг JSON; git — npm требует для некоторых зависимостей
+# curl — для SKILL.md; jq — JSON; git — npm clone; openssh-client — зависимости openclaw тянутся по ssh:// (libsignal-node и др.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         jq \
         git \
+        openssh-client \
     && rm -rf /var/lib/apt/lists/*
+
+# npm-зависимости openclaw (libsignal-node и др.) тянутся по ssh://github.com — в образе нет SSH-ключей.
+# Перенаправляем git на HTTPS, чтобы клонирование шло без ssh.
+RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
+    git config --global url."https://github.com/".insteadOf "git@github.com:"
 
 # Установить OpenClaw глобально (ключевой оркестратор по ТЗ)
 RUN npm config set fetch-timeout 300000 \
