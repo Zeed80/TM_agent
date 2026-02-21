@@ -24,7 +24,7 @@ if [ -f /opt/openclaw-config/openclaw.json ]; then
 else
     echo "[openclaw] No openclaw.json on host, using default config (OpenClaw 2026 schema)"
     cat > "$CONFIG_DEST" << 'EOF'
-{"gateway":{"port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":true,"botToken":"","dmPolicy":"pairing"}}}
+{"gateway":{"mode":"local","port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":true,"botToken":"","dmPolicy":"pairing"}}}
 EOF
 fi
 
