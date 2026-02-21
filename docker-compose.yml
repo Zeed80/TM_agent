@@ -27,8 +27,9 @@ services:
               capabilities: [gpu]
     networks:
       - enterprise-net
+    # В образе ollama/ollama нет curl — проверяем через bash + /dev/tcp (см. ollama/ollama#9781)
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ > /dev/null || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/11434 && echo -e 'GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -54,8 +55,9 @@ services:
       - OLLAMA_KEEP_ALIVE=-1
     networks:
       - enterprise-net
+    # В образе ollama/ollama нет curl — проверяем через bash + /dev/tcp (см. ollama/ollama#9781)
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ > /dev/null || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/11434 && echo -e 'GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'HTTP/1.1 200' <&3"]
       interval: 15s
       timeout: 10s
       retries: 10
