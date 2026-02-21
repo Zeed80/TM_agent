@@ -23,9 +23,17 @@ if [ -f /opt/openclaw-config/openclaw.json ]; then
     cp /opt/openclaw-config/openclaw.json "$CONFIG_DEST"
 else
     echo "[openclaw] No openclaw.json on host, using default config (OpenClaw 2026 schema)"
-    cat > "$CONFIG_DEST" << 'EOF'
-{"gateway":{"mode":"local","port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":true,"botToken":"","dmPolicy":"pairing"}}}
+    if [ -n "${TELEGRAM_BOT_TOKEN}" ]; then
+        echo "[openclaw] TELEGRAM_BOT_TOKEN set — enabling Telegram (token from env)"
+        cat > "$CONFIG_DEST" << 'ENDOFCONFIG'
+{"gateway":{"mode":"local","port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":true,"botToken":"${TELEGRAM_BOT_TOKEN}","dmPolicy":"pairing"}}}
+ENDOFCONFIG
+    else
+        echo "[openclaw] TELEGRAM_BOT_TOKEN not set — Telegram disabled (no 401 spam). Set in .env and restart to enable."
+        cat > "$CONFIG_DEST" << 'EOF'
+{"gateway":{"mode":"local","port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":false}}}
 EOF
+    fi
 fi
 
 echo "[openclaw] Starting Gateway on port 18789..."
