@@ -103,9 +103,3 @@ async def generate_json_llm(prompt: str, system_prompt: str | None = None) -> st
     from src.app_settings import get_setting
     prov = OllamaLLMProvider(url=get_setting("ollama_gpu_url"), model_id=model_id or get_setting("llm_model"))
     return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
-
-
-</think>
-Удаляю ошибочный параметр `self` и добавляю заглушку для облачных провайдеров, чтобы реестр работал пока только с Ollama.
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-StrReplace
