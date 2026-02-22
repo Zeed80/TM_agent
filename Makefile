@@ -65,9 +65,12 @@ update-openclaw: ## Обновить только OpenClaw контейнер
 	docker compose build openclaw
 	docker compose up -d openclaw
 
-openclaw-pair: ## Подсказка: как подключить Telegram-бота к OpenClaw
-	@echo "OpenClaw Telegram: задайте TELEGRAM_BOT_TOKEN в .env и перезапустите openclaw (docker compose restart openclaw)."
-	@echo "Затем в Telegram найдите бота по имени и отправьте /start или команду из документации OpenClaw (dmPolicy: pairing)."
+openclaw-pair: ## Подсказка: OpenClaw — ссылка с токеном и Telegram
+	@echo "OpenClaw — ключи доступа после развёртывания:"
+	@echo "  1. Откройте в браузере: https://<ваш-домен>/openclaw/__openclaw__/canvas/"
+	@echo "  2. Пройдите первоначальную настройку; в конце получите ссылку с токеном — сохраните её."
+	@echo "Telegram: задайте TELEGRAM_BOT_TOKEN в .env и перезапустите openclaw (docker compose restart openclaw)."
+	@echo "Затем в Telegram найдите бота по имени и отправьте /start (dmPolicy: pairing)."
 
 update-api: ## Пересобрать зависимости API (requirements.txt изменился)
 	docker compose build api

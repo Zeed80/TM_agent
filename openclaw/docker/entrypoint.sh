@@ -51,5 +51,16 @@ else
     printf '%s\n' "{\"gateway\":${_gateway},\"agents\":{\"defaults\":{\"workspace\":${_agents_workspace},\"model\":{\"primary\":\"${_model_primary}\"}}},\"channels\":${_channels},\"models\":{\"providers\":{\"ollama\":${_ollama_provider}}}}" > "$CONFIG_DEST"
 fi
 
+# Штатная настройка OpenClaw после развёртывания: нормализация конфига, миграции и генерация
+# ключа доступа (gateway.auth.token) для Control UI. Без токена вход в /openclaw/__openclaw__/canvas/ невозможен.
+echo "[openclaw] Running doctor (fix + generate gateway token)..."
+if openclaw doctor --fix --non-interactive --generate-gateway-token 2>/dev/null; then
+    echo "[openclaw] Doctor completed."
+else
+    # Если флаг --generate-gateway-token не поддерживается в данной версии — gateway сгенерирует токен при старте
+    openclaw doctor --fix --non-interactive 2>/dev/null || true
+fi
+
 echo "[openclaw] Starting Gateway on port 18789..."
+echo "[openclaw] Для получения ссылки с токеном откройте в браузере: /openclaw/__openclaw__/canvas/ (на вашем домене)."
 exec openclaw gateway --port 18789
