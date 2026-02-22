@@ -31,9 +31,10 @@ class SessionPublic(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    """Отправка сообщения в чат (SSE-стриминг ответа)."""
+    """Отправка сообщения в чат (SSE-стриминг ответа). Мультимодальный: текст + опционально изображения (base64)."""
 
     content: str = Field(..., min_length=1)
+    images: list[str] | None = Field(default=None, description="Изображения в base64 (без data URL префикса)")
 
 
 class ChatMessagePublic(BaseModel):

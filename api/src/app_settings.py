@@ -52,6 +52,8 @@ _SCHEMA: dict[str, tuple[str, Any]] = {
     # OpenClaw (модель по умолчанию для Telegram-агента; entrypoint может запросить через GET /settings/public)
     "openclaw_llm_model": ("str", None),
     "openclaw_auto_update": ("bool", None),
+    # Веб-поиск в чате (Serper API: https://serper.dev)
+    "web_search_api_key": ("str_or_none", None),
 }
 
 # Кэш: ключ -> значение (после загрузки из БД). None = не загружали.
@@ -88,6 +90,7 @@ _SETTINGS_ATTR: dict[str, str] = {
     "cors_origins": "cors_origins",
     "openclaw_llm_model": "llm_model",  # по умолчанию = llm_model
     "openclaw_auto_update": "openclaw_auto_update",
+    "web_search_api_key": "web_search_api_key",
 }
 
 

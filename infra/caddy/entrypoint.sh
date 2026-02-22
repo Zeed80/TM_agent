@@ -57,8 +57,12 @@ else
 }"
 fi
 
-# Общий контент блока (reverse_proxy и т.д.) — используется для домена и для локального IP
-ROUTE_BLOCK="  encode gzip zstd
+# Общий контент блока: /openclaw → веб-интерфейс OpenClaw, остальное — API и frontend
+ROUTE_BLOCK="  handle_path /openclaw* {
+    reverse_proxy openclaw:18789
+  }
+  handle {
+  encode gzip zstd
 
   respond /skills/* 403
 
@@ -78,6 +82,7 @@ ROUTE_BLOCK="  encode gzip zstd
   reverse_proxy /* frontend:3000 {
     header_up Upgrade    {http.request.header.Upgrade}
     header_up Connection {http.request.header.Connection}
+  }
   }
 "
 

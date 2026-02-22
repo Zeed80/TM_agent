@@ -71,6 +71,12 @@ const SECTIONS: { title: string; keys: { key: keyof SettingsMap; label: string; 
     ],
   },
   {
+    title: 'Веб-поиск в чате',
+    keys: [
+      { key: 'web_search_api_key', label: 'Serper API Key (serper.dev)', type: 'text', placeholder: 'опционально — для веб-поиска в чате' },
+    ],
+  },
+  {
     title: 'Прочее',
     keys: [
       { key: 'documents_base_dir', label: 'Директория документов', type: 'text' },

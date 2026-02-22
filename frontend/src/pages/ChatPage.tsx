@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, KeyboardEvent } from 'react'
 import {
   Plus, Send, Trash2, Edit2, Check, X,
-  MessageSquare, Loader2, AlertCircle
+  MessageSquare, Loader2, AlertCircle, ExternalLink, ImagePlus
 } from 'lucide-react'
 import { useChatStore } from '../store/chat'
 import { streamChat, ApiError } from '../api/client'
@@ -19,10 +19,12 @@ export default function ChatPage() {
   } = useChatStore()
 
   const [input, setInput] = useState('')
+  const [attachedImages, setAttachedImages] = useState<string[]>([]) // base64 без data URL префикса
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -64,11 +66,11 @@ export default function ChatPage() {
   }
 
   const handleSend = async () => {
-    if (!input.trim() || isStreaming) return
+    if ((!input.trim() && !attachedImages.length) || isStreaming) return
     if (!activeSessionId) {
-      // Создаём сессию автоматически если нет активной
       try {
-        const session = await createSession(input.slice(0, 40) + (input.length > 40 ? '...' : ''))
+        const title = input.trim().slice(0, 40) + (input.trim().length > 40 ? '...' : '') || 'Новый чат'
+        const session = await createSession(title)
         setActiveSession(session.id)
         await _sendMessage(session.id, input.trim())
       } catch {
@@ -80,13 +82,15 @@ export default function ChatPage() {
   }
 
   const _sendMessage = async (sessionId: string, content: string) => {
+    const imagesToSend = [...attachedImages]
     setInput('')
+    setAttachedImages([])
     setError(null)
     appendUserMessage(sessionId, content)
     startStreaming()
 
     try {
-      for await (const event of streamChat(sessionId, content)) {
+      for await (const event of streamChat(sessionId, content, imagesToSend.length ? imagesToSend : undefined)) {
         const ev = event as Record<string, unknown>
         switch (ev.type) {
           case 'status':
@@ -121,6 +125,26 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
+    }
+  }
+
+  const addImageFromFile = (file: File) => {
+    if (!file.type.startsWith('image/') || attachedImages.length >= 5) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1]! : dataUrl
+      setAttachedImages((prev) => [...prev, base64].slice(0, 5))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const item = e.clipboardData?.items?.[0]
+    if (item?.kind === 'file' && item.type.startsWith('image/')) {
+      e.preventDefault()
+      const file = item.getAsFile()
+      if (file) addImageFromFile(file)
     }
   }
 
@@ -225,11 +249,24 @@ export default function ChatPage() {
         {activeSessionId ? (
           <>
             {/* Заголовок */}
-            <div className="shrink-0 px-4 py-3 border-b border-surface-700 flex items-center gap-3">
-              <MessageSquare size={16} className="text-slate-500" />
-              <h2 className="text-sm font-medium text-slate-200 truncate">
-                {sessions.find((s) => s.id === activeSessionId)?.title ?? 'Чат'}
-              </h2>
+            <div className="shrink-0 px-4 py-3 border-b border-surface-700 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <MessageSquare size={16} className="text-slate-500 shrink-0" />
+                <h2 className="text-sm font-medium text-slate-200 truncate">
+                  {sessions.find((s) => s.id === activeSessionId)?.title ?? 'Чат'}
+                </h2>
+              </div>
+              <a
+                href={`${window.location.origin}/openclaw`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                         bg-accent/15 text-accent-light hover:bg-accent/25 transition-colors"
+                title="Мультимодальный чат, веб-поиск и др. в OpenClaw"
+              >
+                <ExternalLink size={12} />
+                Открыть в OpenClaw
+              </a>
             </div>
 
             {/* Сообщения */}
@@ -260,25 +297,66 @@ export default function ChatPage() {
 
             {/* Поле ввода */}
             <div className="shrink-0 p-4 border-t border-surface-700">
+              {attachedImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {attachedImages.map((base64, i) => (
+                    <div key={i} className="relative inline-block">
+                      <img
+                        src={`data:image/jpeg;base64,${base64}`}
+                        alt=""
+                        className="w-12 h-12 object-cover rounded-lg border border-surface-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAttachedImages((p) => p.filter((_, j) => j !== i))}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center hover:bg-red-400"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex items-end gap-3 bg-surface-800 border border-surface-700
                               rounded-2xl px-4 py-3 focus-within:border-accent/40 transition-colors">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) addImageFromFile(f)
+                    e.target.value = ''
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={isStreaming || attachedImages.length >= 5}
+                  className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-accent-light hover:bg-surface-700 disabled:opacity-50"
+                  title="Прикрепить изображение (до 5)"
+                >
+                  <ImagePlus size={18} />
+                </button>
                 <textarea
                   ref={textareaRef}
                   rows={1}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Задайте вопрос... (Enter — отправить, Shift+Enter — перенос)"
+                  onPaste={handlePaste}
+                  placeholder="Задайте вопрос... Можно прикрепить изображение (вставка или кнопка). Enter — отправить."
                   disabled={isStreaming}
                   className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500
                              resize-none focus:outline-none leading-relaxed min-h-[24px] max-h-40"
                 />
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || isStreaming}
+                  disabled={(!input.trim() && !attachedImages.length) || isStreaming}
                   className={clsx(
                     'shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all',
-                    input.trim() && !isStreaming
+                    (input.trim() || attachedImages.length) && !isStreaming
                       ? 'bg-accent text-white hover:bg-accent-hover'
                       : 'bg-surface-700 text-slate-500 cursor-not-allowed',
                   )}
@@ -302,13 +380,28 @@ export default function ChatPage() {
               <MessageSquare size={28} className="text-accent-light" />
             </div>
             <h3 className="text-lg font-semibold text-slate-200 mb-2">Начните диалог</h3>
-            <p className="text-sm text-slate-500 max-w-xs mb-6">
+            <p className="text-sm text-slate-500 max-w-xs mb-4">
               Задайте вопрос о производстве, документации, складе или загрузите чертёж для анализа.
             </p>
-            <button onClick={handleNewChat} className="btn-primary">
-              <Plus size={16} />
-              Новый чат
-            </button>
+            <p className="text-xs text-slate-500 max-w-xs mb-6">
+              Для мультимодального чата (изображения, файлы) и веб-поиска откройте OpenClaw.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button onClick={handleNewChat} className="btn-primary">
+                <Plus size={16} />
+                Новый чат
+              </button>
+              <a
+                href={`${window.location.origin}/openclaw`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
+                         bg-accent/15 text-accent-light hover:bg-accent/25 border border-accent/30 transition-colors"
+              >
+                <ExternalLink size={14} />
+                Открыть в OpenClaw
+              </a>
+            </div>
           </div>
         )}
       </div>

@@ -97,5 +97,8 @@ class Settings(BaseSettings):
     # ── vLLM (локальный, OpenAI-совместимый API) ─────────────────────
     vllm_base_url: str | None = None  # например http://vllm:8000/v1
 
+    # Веб-поиск в чате (Serper API: https://serper.dev)
+    web_search_api_key: str | None = None
+
 
 settings = Settings()

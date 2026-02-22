@@ -165,6 +165,26 @@ _TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Поиск в интернете. Используй для актуальной информации из веба: новости, курсы валют, "
+                "документация производителей, стандарты, погода и т.п."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Поисковый запрос на русском или английском",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 # Системный промпт для Web-чата
@@ -185,6 +205,7 @@ _SYSTEM_PROMPT = """Ты — Ярослав, ИТР-ассистент прои�
 - inventory_sql_search: складской учёт (остатки, номенклатура)
 - blueprint_vision: анализ чертежей (требует путь к файлу)
 - norm_control: нормоконтроль чертежа или техпроцесса (document_type + identifier или image_path)
+- web_search: поиск в интернете (актуальная информация из веба)
 """
 
 # Timeout для внутренних вызовов инструментов (те же 120s, правило 1)
@@ -338,7 +359,7 @@ async def send_message(
         raise HTTPException(status_code=404, detail="Сессия не найдена.")
 
     return StreamingResponse(
-        _stream_agent_response(session_id, request.content, current_user),
+        _stream_agent_response(session_id, request.content, current_user, request.images),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -352,6 +373,7 @@ async def _stream_agent_response(
     session_id: UUID,
     user_content: str,
     current_user: dict,
+    user_images: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     Генератор SSE-событий для одного сообщения пользователя.
@@ -402,6 +424,12 @@ async def _stream_agent_response(
                 tool_result_str = json.dumps(r["tool_result"], ensure_ascii=False) \
                     if isinstance(r["tool_result"], dict) else str(r["tool_result"] or "")
                 ollama_messages.append({"role": "tool", "content": tool_result_str})
+
+        # Текущее сообщение пользователя (с опциональными изображениями для мультимодального чата)
+        current_user_msg: dict = {"role": "user", "content": user_content}
+        if user_images:
+            current_user_msg["images"] = user_images[:5]  # не более 5 изображений
+        ollama_messages.append(current_user_msg)
 
         # ── Текущее назначение LLM (из реестра или env) ───────────────
         llm_assignment = await get_assignment("llm")
@@ -558,6 +586,10 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
     Возвращает (результат_str, краткое_резюме).
     """
     # Маршрутизация инструментов → внутренние endpoints
+    # Веб-поиск — через Serper API (если задан web_search_api_key в Настройках)
+    if tool_name == "web_search":
+        return await _execute_web_search(tool_input)
+
     endpoint_map = {
         "enterprise_graph_search": "/skills/graph-search",
         "enterprise_docs_search":  "/skills/docs-search",
@@ -638,6 +670,53 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
         logger.error(f"[Chat] Ошибка вызова инструмента {tool_name}: {exc}")
         error = {"error": str(exc)}
         return json.dumps(error, ensure_ascii=False), f"Ошибка: {exc}"
+
+
+async def _execute_web_search(tool_input: dict) -> tuple[str, str]:
+    """Веб-поиск через Serper API (google.serper.dev). Ключ задаётся в Настройках: web_search_api_key."""
+    api_key = (get_setting("web_search_api_key") or "").strip()
+    query = (tool_input.get("query") or "").strip()
+    if not query:
+        return json.dumps({"error": "Пустой запрос"}, ensure_ascii=False), "Пустой запрос"
+
+    if not api_key:
+        return (
+            json.dumps(
+                {
+                    "info": "Веб-поиск не настроен. Задайте web_search_api_key в Настройках (Serper API: serper.dev) или откройте OpenClaw для веб-поиска.",
+                },
+                ensure_ascii=False,
+            ),
+            "Веб-поиск не настроен",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
+            resp = await client.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                json={"q": query, "num": 8},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        organic = data.get("organic", [])[:8]
+        snippets = [
+            {"title": o.get("title", ""), "snippet": o.get("snippet", ""), "link": o.get("link", "")}
+            for o in organic
+        ]
+        result = {"query": query, "results": snippets}
+        summary = f"Найдено {len(snippets)} результатов по запросу «{query[:50]}»"
+        return json.dumps(result, ensure_ascii=False), summary
+    except httpx.HTTPStatusError as e:
+        error = {"error": f"HTTP {e.response.status_code}", "detail": e.response.text[:300]}
+        return json.dumps(error, ensure_ascii=False), f"Ошибка веб-поиска: {e.response.status_code}"
+    except Exception as exc:
+        logger.warning(f"[Chat] Веб-поиск: {exc}")
+        return (
+            json.dumps({"error": str(exc)}, ensure_ascii=False),
+            f"Ошибка: {exc}",
+        )
 
 
 def _sse(data: dict) -> str:

@@ -125,13 +125,17 @@ export async function uploadFile(
 
 /**
  * SSE подключение для стримингового чата.
- * Использует fetch + ReadableStream вместо EventSource (нужны кастомные заголовки).
+ * Мультимодальный: content + опционально images (base64 без data URL префикса).
  */
 export async function* streamChat(
   sessionId: string,
   content: string,
+  images?: string[],
 ): AsyncGenerator<Record<string, unknown>> {
   const token = getToken()
+
+  const body: { content: string; images?: string[] } = { content }
+  if (images?.length) body.images = images
 
   const res = await fetch(`${BASE_URL}/chat/sessions/${sessionId}/message`, {
     method: 'POST',
@@ -140,7 +144,7 @@ export async function* streamChat(
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
