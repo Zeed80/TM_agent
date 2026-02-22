@@ -7,7 +7,7 @@ SHELL := /bin/bash
 
 .PHONY: help up down restart ps logs logs-all logs-caddy logs-api logs-gpu \
         update update-openclaw update-api update-frontend openclaw-pair \
-        restart-caddy check-web \
+        restart-caddy caddy-fallback-on-cert-error check-web \
         init-db init-pg init-qdrant pull-models \
         ingest-excel ingest-pdf ingest-blueprints ingest-techprocess ingest-all \
         shell-api shell-neo4j shell-pg shell-qdrant \
@@ -24,6 +24,8 @@ export
 
 up: ## Запустить все сервисы
 	docker compose up -d
+	@nohup bash scripts/caddy-fallback-on-cert-error.sh >/dev/null 2>&1 & \
+	  echo "✓ Запущен фоновый проверяльщик: при ошибке сертификата Caddy в .env добавится CADDY_TLS=internal и Caddy перезапустится (~2 мин)." || true
 	@echo ""
 	@echo "✓ Сервисы запущены. Статус: make ps"
 	@echo "✓ Логи API:       make logs"
@@ -88,6 +90,9 @@ logs-caddy: ## Логи Caddy (HTTPS / Let's Encrypt)
 
 restart-caddy: ## Перезапустить Caddy (обновить конфиг)
 	docker compose restart caddy
+
+caddy-fallback-on-cert-error: ## При ошибке сертификата (напр. LE 429) добавить CADDY_TLS=internal в .env и перезапустить Caddy (вызывается автоматически после make up)
+	@bash scripts/caddy-fallback-on-cert-error.sh
 
 check-web: ## Диагностика: почему не открывается веб-интерфейс
 	@echo "=== Контейнеры (caddy, frontend, api) ==="
