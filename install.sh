@@ -418,15 +418,17 @@ if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
     # Экранируем одинарные кавычки для безопасной подстановки в SQL (PostgreSQL: ' → '')
     SAFE_USERNAME=$(printf '%s' "${ADMIN_USERNAME:-admin}" | sed "s/'/''/g")
     SAFE_FULLNAME=$(printf '%s' "${ADMIN_FULLNAME:-Администратор}" | sed "s/'/''/g")
-    # Создаём пользователя в БД
-    docker compose exec -T postgres psql -U enterprise -d enterprise_ai -c "
-INSERT INTO users (username, full_name, password_hash, role)
-VALUES ('${SAFE_USERNAME}', '${SAFE_FULLNAME}', '${ADMIN_HASH}', 'admin')
-ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
-" 2>/dev/null && log_ok "Пользователь '${ADMIN_USERNAME:-admin}' создан" \
-  || log_warn "Не удалось создать пользователя (возможно, уже существует)"
+    # Хэш bcrypt может содержать $ — в SQL передаём как один аргумент (переменная уже подставлена)
+    docker compose exec -T postgres psql -U enterprise -d enterprise_ai -c \
+      "INSERT INTO users (username, full_name, password_hash, role) VALUES ('${SAFE_USERNAME}', '${SAFE_FULLNAME}', '${ADMIN_HASH}', 'admin') ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;" 2>/dev/null && \
+      log_ok "Пользователь '${ADMIN_USERNAME:-admin}' создан" || \
+      log_warn "Не удалось создать пользователя (проверьте: docker compose logs api). Выполните позже: make create-admin"
+    # Проверяем, что пользователь есть в БД
+    if ! docker compose exec -T postgres psql -U enterprise -d enterprise_ai -t -c "SELECT 1 FROM users WHERE username = '${SAFE_USERNAME}' LIMIT 1;" 2>/dev/null | grep -q 1; then
+      log_warn "Пользователь admin не найден в БД. После запуска выполните: make create-admin"
+    fi
   else
-    log_warn "Не удалось сгенерировать хэш пароля. Создайте пользователя вручную через API."
+    log_warn "Не удалось сгенерировать хэш пароля (API мог быть ещё не готов). После запуска выполните: make create-admin"
   fi
 else
   log_warn "Пароль admin не задан. Создайте пользователя вручную."
@@ -502,6 +504,7 @@ echo
 echo -e "${BOLD}Учётные данные администратора:${NC}"
 echo -e "  Логин:  ${CYAN}${ADMIN_USERNAME:-admin}${NC}"
 echo -e "  Пароль: ${CYAN}(указанный при установке)${NC}"
+echo -e "${YELLOW}  Если вход не принимает логин/пароль: make create-admin (задаст новый пароль), затем очистите данные сайта в браузере (Cookie/Storage).${NC}"
 echo
 echo -e "${BOLD}Следующие шаги:${NC}"
 echo -e "  1. Откройте ${CYAN}${ACCESS_URL}${NC} и войдите"
