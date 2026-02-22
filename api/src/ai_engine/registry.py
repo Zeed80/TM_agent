@@ -51,8 +51,7 @@ async def generate(
             top_p=top_p,
             stop=stop,
         )
-    if ptype in ("openai", "openrouter", "anthropic", "vllm"):
-        # Облачные и vLLM — в следующих шагах
+    if ptype in ("openai", "openrouter", "anthropic", "vllm", "minimax", "z_ai"):
         from src.ai_engine.providers import openai_compat
         return await openai_compat.llm_generate(
             provider_type=ptype,
@@ -89,7 +88,7 @@ async def generate_json_llm(prompt: str, system_prompt: str | None = None) -> st
         url = _ollama_url(config)
         prov = OllamaLLMProvider(url=url, model_id=model_id)
         return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
-    if ptype in ("openai", "openrouter", "anthropic", "vllm"):
+    if ptype in ("openai", "openrouter", "anthropic", "vllm", "minimax", "z_ai"):
         from src.ai_engine.providers import openai_compat
         return await openai_compat.llm_generate_json(
             provider_type=ptype,
@@ -103,3 +102,28 @@ async def generate_json_llm(prompt: str, system_prompt: str | None = None) -> st
     from src.app_settings import get_setting
     prov = OllamaLLMProvider(url=get_setting("ollama_gpu_url"), model_id=model_id or get_setting("llm_model"))
     return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
+
+
+# ─── VLM (анализ чертежей) ─────────────────────────────────────────────
+
+async def analyze_blueprint(
+    image_path: Path | str,
+    system_prompt: str,
+    user_prompt: str,
+) -> str:
+    """
+    Анализ чертежа через VLM. VRAM (переключение LLM ↔ VLM) выполняет vlm_client внутри.
+    Используется в blueprint-vision и norm-control.
+    """
+    from pathlib import Path
+
+    from src.ai_engine.vlm_client import analyze_blueprint as _vlm_analyze
+
+    path = Path(image_path)
+    if not path.exists():
+        raise FileNotFoundError(str(path))
+    return await _vlm_analyze(
+        image_path=path,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+    )

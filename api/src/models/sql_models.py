@@ -77,3 +77,30 @@ class BlueprintVisionResponse(BaseModel):
     answer: str
     image_path: str
     source: str = Field(..., description="'graph_cache' или 'vlm_fresh'")
+
+
+# ─── Norm-control (нормоконтроль) ──────────────────────────────────────
+
+class NormControlRequest(BaseModel):
+    """Запрос на проверку документа (нормоконтроль)."""
+
+    document_type: str = Field(..., description="drawing | tech_process")
+    identifier: str = Field(default="", description="Номер чертежа или номер техпроцесса")
+    image_path: str | None = Field(default=None, description="Путь к файлу чертежа (для drawing, если нет в графе)")
+
+
+class NormControlCheckItem(BaseModel):
+    """Один пункт проверки в отчёте нормоконтроля."""
+
+    name: str = Field(..., description="Название проверки")
+    status: str = Field(..., description="passed | failed")
+    comment: str = Field(default="", description="Краткий комментарий")
+
+
+class NormControlResponse(BaseModel):
+    """Ответ навыка norm-control."""
+
+    passed: bool = Field(..., description="Нормоконтроль пройден или нет")
+    checks: list[NormControlCheckItem] = Field(default_factory=list)
+    summary: str = Field(default="", description="Итоговое заключение")
+    document_info: dict[str, Any] = Field(default_factory=dict, description="Краткие данные документа (опционально)")

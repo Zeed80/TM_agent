@@ -109,12 +109,13 @@ async def root() -> JSONResponse:
 
 
 # ── Навыки (OpenClaw / внутренние) ───────────────────────────────────
-from src.routers import graph_search, docs_search, blueprint_vision, inventory_sql  # noqa: E402
+from src.routers import graph_search, docs_search, blueprint_vision, inventory_sql, norm_control  # noqa: E402
 
 app.include_router(graph_search.router, prefix="/skills")
 app.include_router(docs_search.router, prefix="/skills")
 app.include_router(blueprint_vision.router, prefix="/skills")
 app.include_router(inventory_sql.router, prefix="/skills")
+app.include_router(norm_control.router, prefix="/skills")
 
 # ── Web API (авторизованные) ─────────────────────────────────────────
 from src.routers import auth_router, chat_router, files_router, system_router, admin_router, models_router  # noqa: E402

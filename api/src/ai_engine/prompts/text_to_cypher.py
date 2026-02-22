@@ -24,7 +24,7 @@ SYSTEM_PROMPT = """Ты — эксперт по Cypher-запросам для �
 - `Mold` — Пресс-форма или оснастка: id, name, mold_number, cavities, compatible_machine_types
 - `Tool` — Инструмент: id, name, type, size, gost, coating
 - `TechProcess` — Техпроцесс: id, number, revision, status (ACTIVE|ARCHIVED), created_at
-- `Operation` — Операция техпроцесса: id, number, name, description, setup_time_min, machine_time_min
+- `Operation` — Операция техпроцесса: id, number, name, description, setup_time_min, machine_time_min (время установки и машинное время в минутах; по ним можно считать трудозатраты: SUM(op.setup_time_min + op.machine_time_min))
 
 ### Связи (Relationships):
 - `(Part)-[:HAS_DRAWING]->(Drawing)`
@@ -46,8 +46,9 @@ SYSTEM_PROMPT = """Ты — эксперт по Cypher-запросам для �
 3. ВСЕГДА ограничивай результат: добавляй `LIMIT 25` если не указано иное.
 4. Для необязательных связей используй `OPTIONAL MATCH`.
 5. Свойства связей доступны через: `(a)-[r:HAS_OPERATION]->(b) WHERE r.sequence = 1`.
-6. Если вопрос неоднозначен — генерируй запрос для наиболее вероятной интерпретации.
-7. Возвращай ТОЛЬКО JSON, без markdown-обёртки.
+6. Для вопросов о трудозатратах, трудоёмкости, суммарном времени: используй op.setup_time_min и op.machine_time_min, при необходимости SUM() и группировку по техпроцессу/детали.
+7. Если вопрос неоднозначен — генерируй запрос для наиболее вероятной интерпретации.
+8. Возвращай ТОЛЬКО JSON, без markdown-обёртки.
 
 ## Формат ответа (строго JSON):
 {
@@ -81,7 +82,19 @@ FEW_SHOT_EXAMPLES = """
 
 Вопрос: "Какой инструмент нужен для всех фрезерных операций детали Х?"
 {
-  "cypher": "MATCH (p:Part)\\nWHERE toLower(p.name) CONTAINS toLower($part_name) OR p.drawing_number = $drawing_number\\nMATCH (tp:TechProcess)-[:FOR_PART]->(p)\\nWHERE tp.status = 'ACTIVE'\\nMATCH (tp)-[:HAS_OPERATION]->(op:Operation)-[:PERFORMED_ON]->(m:Machine)\\nWHERE m.type IN ['CNC', 'UNIVERSAL_MILLING']\\nMATCH (op)-[:USES_TOOL]->(t:Tool)\\nRETURN DISTINCT t.name AS tool_name, t.type, t.size, t.gost, t.coating\\nORDER BY t.type, t.name",
+  "cypher": "MATCH (p:Part)\\nWHERE toLower(p.name) CONTAINS toLower($part_name) OR p.drawing_number = $drawing_number\\nMATCH (tp:TechProcess)-[:FOR_PART]->(p)\\nWHERE tp.status = 'ACTIVE'\\nMATCH (tp)-[:HAS_OPERATION]->(op:Operation)-[:PERFORMED_ON]->(m:Machine)\\nWHERE m.type IN ['CNC', 'UNIVERSAL_MILLING']\\nMATCH (op)-[:USES_TOOL]->(t:Tool)\\nRETURN DISTINCT t.name AS tool_name, t.type, t.size, t.gost, t.coating\\nORDER BY t.type, t.name\\nLIMIT 25",
   "explanation": "Находит все инструменты для фрезерных операций активного техпроцесса"
+}
+
+Вопрос: "Трудозатраты по техпроцессу ТП-001" или "Суммарное время по техпроцессу ТП-001"
+{
+  "cypher": "MATCH (tp:TechProcess {number: 'ТП-001'})-[:FOR_PART]->(p:Part)\\nMATCH (tp)-[r:HAS_OPERATION]->(op:Operation)\\nOPTIONAL MATCH (op)-[:PERFORMED_ON]->(m:Machine)\\nWITH tp, p, r, op, m ORDER BY r.sequence\\nRETURN tp.number AS techprocess, p.name AS part_name, p.drawing_number,\\n       r.sequence AS sequence, op.name AS operation,\\n       op.setup_time_min, op.machine_time_min,\\n       (COALESCE(op.setup_time_min, 0) + COALESCE(op.machine_time_min, 0)) AS op_total_min,\\n       m.name AS machine\\nORDER BY r.sequence\\nLIMIT 50",
+  "explanation": "Возвращает операции техпроцесса с временами установки и машинным временем; итог по техпроцессу — сумма op_total_min"
+}
+
+Вопрос: "Трудоёмкость изготовления детали по чертежу 123-456" или "Суммарное время по детали 123-456"
+{
+  "cypher": "MATCH (tp:TechProcess)-[:FOR_PART]->(p:Part {drawing_number: '123-456'})\\nWHERE tp.status = 'ACTIVE'\\nMATCH (tp)-[r:HAS_OPERATION]->(op:Operation)\\nWITH tp, p,\\n     SUM(COALESCE(op.setup_time_min, 0) + COALESCE(op.machine_time_min, 0)) AS total_min,\\n     SUM(COALESCE(op.setup_time_min, 0)) AS total_setup_min,\\n     SUM(COALESCE(op.machine_time_min, 0)) AS total_machine_min\\nRETURN p.name AS part_name, p.drawing_number, tp.number AS techprocess,\\n       total_setup_min, total_machine_min, total_min\\nLIMIT 10",
+  "explanation": "Суммарные трудозатраты по активному техпроцессу для детали с указанным номером чертежа"
 }
 """

@@ -136,6 +136,35 @@ _TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "norm_control",
+            "description": (
+                "Проверка чертежа или техпроцесса на соответствие нормам и ГОСТам (нормоконтроль). "
+                "Используй, когда пользователь просит провести нормоконтроль, проверить оформление документа или соответствие стандартам."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "document_type": {
+                        "type": "string",
+                        "enum": ["drawing", "tech_process"],
+                        "description": "Тип документа: drawing — чертёж, tech_process — техпроцесс",
+                    },
+                    "identifier": {
+                        "type": "string",
+                        "description": "Номер чертежа или номер техпроцесса (например ТП-001)",
+                    },
+                    "image_path": {
+                        "type": "string",
+                        "description": "Путь к файлу чертежа (опционально, только для drawing)",
+                    },
+                },
+                "required": ["document_type"],
+            },
+        },
+    },
 ]
 
 # Системный промпт для Web-чата
@@ -151,10 +180,11 @@ _SYSTEM_PROMPT = """Ты — Ярослав, ИТР-ассистент прои�
 6. Общайся на русском языке. Технические термины используй точно.
 
 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
-- enterprise_graph_search: производственный граф (детали, маршруты, техпроцессы, станки)
+- enterprise_graph_search: производственный граф (детали, маршруты, техпроцессы, станки, трудозатраты)
 - enterprise_docs_search: техдокументация (ГОСТы, паспорта, инструкции)
 - inventory_sql_search: складской учёт (остатки, номенклатура)
 - blueprint_vision: анализ чертежей (требует путь к файлу)
+- norm_control: нормоконтроль чертежа или техпроцесса (document_type + identifier или image_path)
 """
 
 # Timeout для внутренних вызовов инструментов (те же 120s, правило 1)
@@ -533,6 +563,7 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
         "enterprise_docs_search":  "/skills/docs-search",
         "inventory_sql_search":    "/skills/inventory-sql",
         "blueprint_vision":        "/skills/blueprint-vision",
+        "norm_control":            "/skills/norm-control",
     }
 
     endpoint = endpoint_map.get(tool_name)
@@ -551,6 +582,12 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
         body = {
             "image_path": tool_input.get("image_path", ""),
             "question": tool_input.get("question", "Проведи полный анализ чертежа"),
+        }
+    elif tool_name == "norm_control":
+        body = {
+            "document_type": tool_input.get("document_type", "drawing"),
+            "identifier": tool_input.get("identifier", ""),
+            "image_path": tool_input.get("image_path") or None,
         }
     else:
         body = tool_input
@@ -582,6 +619,10 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
                 summary = f"Получено {count} записей из склада"
             elif tool_name == "blueprint_vision":
                 summary = "Чертёж проанализирован"
+            elif tool_name == "norm_control":
+                summary = (
+                    "Нормоконтроль пройден" if data.get("passed") else "Нормоконтроль не пройден"
+                )
             else:
                 summary = "Выполнено"
 
