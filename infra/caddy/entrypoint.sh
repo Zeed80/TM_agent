@@ -58,10 +58,11 @@ else
 fi
 
 # Общий контент блока: /openclaw → веб-интерфейс OpenClaw (canvas с первоначальной настройкой и ссылкой с токеном)
-ROUTE_BLOCK="  handle path /openclaw {
+# В handle путь задаётся без слова path: handle /openclaw { ... }
+ROUTE_BLOCK="  handle /openclaw {
     redir /openclaw/__openclaw__/canvas/ permanent
   }
-  handle path /openclaw/ {
+  handle /openclaw/ {
     redir /openclaw/__openclaw__/canvas/ permanent
   }
   handle_path /openclaw* {
