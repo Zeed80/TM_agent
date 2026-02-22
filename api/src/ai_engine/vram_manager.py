@@ -17,7 +17,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from src.config import settings
+from src.app_settings import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +60,9 @@ class VRAMManager:
         """
         Вызывается при старте FastAPI (lifespan).
         Загружает LLM в VRAM с keep_alive=-1 (не выгружать автоматически).
-        По умолчанию использует settings.llm_model.
+        По умолчанию использует настройку llm_model (БД или .env).
         """
-        await self.warm_up_llm_with_model(settings.llm_model)
+        await self.warm_up_llm_with_model(get_setting("llm_model"))
 
     async def warm_up_llm_with_model(self, model_id: str) -> None:
         """
@@ -73,10 +73,11 @@ class VRAMManager:
             logger.info("[VRAM] Уже инициализирован, пропускаем прогрев")
             return
 
-        logger.info(f"[VRAM] Прогрев LLM: {model_id} (num_ctx={settings.llm_num_ctx})")
+        num_ctx = get_setting("llm_num_ctx")
+        logger.info(f"[VRAM] Прогрев LLM: {model_id} (num_ctx={num_ctx})")
         await self._load_model(
             model=model_id,
-            num_ctx=settings.llm_num_ctx,
+            num_ctx=num_ctx,
         )
         self._current_model = model_id
         self._initialized = True
@@ -89,7 +90,7 @@ class VRAMManager:
         Если LLM уже загружена — возвращается немедленно (без блокировки).
         Если VLM загружена — ждёт освобождения Lock, затем переключается.
         """
-        await self.ensure_llm_for_model(settings.llm_model)
+        await self.ensure_llm_for_model(get_setting("llm_model"))
 
     async def ensure_llm_for_model(self, model_id: str) -> None:
         """
@@ -103,7 +104,7 @@ class VRAMManager:
             if self._current_model != model_id:
                 await self._swap_to(
                     target_model=model_id,
-                    num_ctx=settings.llm_num_ctx,
+                    num_ctx=get_setting("llm_num_ctx"),
                 )
 
     @asynccontextmanager
@@ -118,7 +119,7 @@ class VRAMManager:
             async with vram_manager.use_vlm():
                 result = await vlm_client.analyze_blueprint(image_b64)
         """
-        async with self.use_vlm_for_model(settings.vlm_model) as _:
+        async with self.use_vlm_for_model(get_setting("vlm_model")) as _:
             yield
 
     @asynccontextmanager
@@ -132,7 +133,7 @@ class VRAMManager:
         assignment = await get_assignment("llm")
         restore_model: str | None = None
         if assignment.get("provider_type") == "ollama_gpu":
-            restore_model = (assignment.get("model_id") or "").strip() or settings.llm_model
+            restore_model = (assignment.get("model_id") or "").strip() or get_setting("llm_model")
 
         logger.info("[VRAM] Запрос на VLM — ожидаю Lock...")
         async with self._lock:
@@ -140,7 +141,7 @@ class VRAMManager:
             try:
                 await self._swap_to(
                     target_model=vlm_model_id,
-                    num_ctx=settings.vlm_num_ctx,
+                    num_ctx=get_setting("vlm_num_ctx"),
                 )
                 logger.info("[VRAM] VLM активна — передаю управление")
                 yield
@@ -149,7 +150,7 @@ class VRAMManager:
                 if restore_model:
                     await self._swap_to(
                         target_model=restore_model,
-                        num_ctx=settings.llm_num_ctx,
+                        num_ctx=get_setting("llm_num_ctx"),
                     )
                     logger.info("[VRAM] LLM восстановлена")
         # Lock освобождён автоматически после выхода из блока async with
@@ -161,10 +162,12 @@ class VRAMManager:
         Правило 1: connect=10s, read/write=120s (переключение занимает 60-90 сек).
         Правило 2: num_ctx передаётся при каждой загрузке.
         """
+        swap_to = get_setting("vram_swap_timeout")
+        gpu_url = get_setting("ollama_gpu_url")
         _timeout = httpx.Timeout(
             connect=10.0,
-            read=settings.vram_swap_timeout,
-            write=settings.vram_swap_timeout,
+            read=swap_to,
+            write=swap_to,
             pool=5.0,
         )
 
@@ -174,7 +177,7 @@ class VRAMManager:
                 logger.info(f"[VRAM] Выгрузка модели: {self._current_model}")
                 try:
                     await client.post(
-                        f"{settings.ollama_gpu_url}/api/generate",
+                        f"{gpu_url}/api/generate",
                         json={
                             "model": self._current_model,
                             "prompt": "",
@@ -196,7 +199,7 @@ class VRAMManager:
                 f"(num_ctx={num_ctx}, keep_alive=-1)"
             )
             await client.post(
-                f"{settings.ollama_gpu_url}/api/generate",
+                f"{gpu_url}/api/generate",
                 json={
                     "model": target_model,
                     "prompt": "",
@@ -211,15 +214,17 @@ class VRAMManager:
 
     async def _load_model(self, model: str, num_ctx: int) -> None:
         """Загрузить модель с нуля (без предварительной выгрузки)."""
+        swap_to = get_setting("vram_swap_timeout")
+        gpu_url = get_setting("ollama_gpu_url")
         _timeout = httpx.Timeout(
             connect=10.0,
-            read=settings.vram_swap_timeout,
-            write=settings.vram_swap_timeout,
+            read=swap_to,
+            write=swap_to,
             pool=5.0,
         )
         async with httpx.AsyncClient(timeout=_timeout) as client:
             await client.post(
-                f"{settings.ollama_gpu_url}/api/generate",
+                f"{gpu_url}/api/generate",
                 json={
                     "model": model,
                     "prompt": "",

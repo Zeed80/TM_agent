@@ -31,8 +31,8 @@ from fastapi.responses import StreamingResponse
 
 from src.ai_engine.model_assignments import get_assignment
 from src.ai_engine.vram_manager import VRAMManager
+from src.app_settings import get_setting
 from src.auth import get_current_user
-from src.config import settings
 from src.db.postgres_client import postgres_client as _pg
 from src.models.chat_models import (
     ChatMessagePublic,
@@ -375,8 +375,8 @@ async def _stream_agent_response(
 
         # ── Текущее назначение LLM (из реестра или env) ───────────────
         llm_assignment = await get_assignment("llm")
-        ollama_url = (llm_assignment.get("config") or {}).get("url", "").strip() or settings.ollama_gpu_url
-        llm_model = (llm_assignment.get("model_id") or "").strip() or settings.llm_model
+        ollama_url = (llm_assignment.get("config") or {}).get("url", "").strip() or get_setting("ollama_gpu_url")
+        llm_model = (llm_assignment.get("model_id") or "").strip() or get_setting("llm_model")
         provider_type = (llm_assignment.get("provider_type") or "").strip().lower()
 
         # ── Agentic Loop ──────────────────────────────────────────────
@@ -389,7 +389,7 @@ async def _stream_agent_response(
         full_assistant_content = ""
         tool_messages_to_save: list[dict] = []
 
-        for iteration in range(settings.chat_max_tool_iterations):
+        for iteration in range(get_setting("chat_max_tool_iterations")):
             yield _sse({"type": "status", "text": f"Мышление {'.' * (iteration + 1)}"})
 
             # Вызов Ollama: НЕ стримим (ждём tool_calls)
@@ -402,7 +402,7 @@ async def _stream_agent_response(
                         "tools": _TOOLS,
                         "stream": False,
                         "options": {
-                            "num_ctx": settings.llm_num_ctx,
+                            "num_ctx": get_setting("llm_num_ctx"),
                             "temperature": 0.7,
                             "repeat_penalty": 1.1,
                         },

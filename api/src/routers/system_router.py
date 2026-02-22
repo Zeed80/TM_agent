@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from src.ai_engine.vram_manager import VRAMManager
 from src.auth import get_current_user
-from src.config import settings
+from src.app_settings import get_setting
 from src.db.neo4j_client import neo4j_client
 from src.db.postgres_client import postgres_client
 from src.db.qdrant_client import qdrant_client
@@ -105,7 +105,7 @@ async def system_status(
     t = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-            resp = await client.get(f"{settings.ollama_gpu_url}/api/tags")
+            resp = await client.get(f"{get_setting('ollama_gpu_url')}/api/tags")
             resp.raise_for_status()
             data = resp.json()
             models = [m["name"] for m in data.get("models", [])]
@@ -122,7 +122,7 @@ async def system_status(
     t = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-            resp = await client.get(f"{settings.ollama_cpu_url}/api/tags")
+            resp = await client.get(f"{get_setting('ollama_cpu_url')}/api/tags")
             resp.raise_for_status()
             data = resp.json()
             models = [m["name"] for m in data.get("models", [])]
@@ -140,7 +140,7 @@ async def system_status(
     gpu_available = False
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
-            resp = await client.get(f"{settings.ollama_gpu_url}/api/ps")
+            resp = await client.get(f"{get_setting('ollama_gpu_url')}/api/ps")
             if resp.status_code == 200:
                 gpu_available = True
     except Exception:
@@ -153,7 +153,7 @@ async def system_status(
 
     # ── Использование диска ──────────────────────────────────────────
     disk_usage: list[DiskUsage] = []
-    base_dir = Path(settings.documents_base_dir)
+    base_dir = Path(get_setting("documents_base_dir"))
     for folder_name in ["blueprints", "manuals", "gosts", "emails", "catalogs", "tech_processes"]:
         folder_path = base_dir / folder_name
         if folder_path.exists():
@@ -171,8 +171,8 @@ async def system_status(
         services=services,
         vram=vram_status,
         disk_usage=disk_usage,
-        llm_model=settings.llm_model,
-        vlm_model=settings.vlm_model,
-        embedding_model=settings.embedding_model,
-        reranker_model=settings.reranker_model,
+        llm_model=get_setting("llm_model"),
+        vlm_model=get_setting("vlm_model"),
+        embedding_model=get_setting("embedding_model"),
+        reranker_model=get_setting("reranker_model"),
     )

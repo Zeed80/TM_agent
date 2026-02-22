@@ -9,6 +9,7 @@ import ModelsPage from './pages/ModelsPage'
 import StatusPage from './pages/StatusPage'
 import UsersPage from './pages/UsersPage'
 import AdminPage from './pages/AdminPage'
+import SettingsPage from './pages/SettingsPage'
 import AppLayout from './components/AppLayout'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="status" element={<StatusPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="admin" element={<AdminPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

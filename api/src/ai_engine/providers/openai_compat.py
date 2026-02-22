@@ -12,22 +12,19 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
+from src.app_settings import get_setting
 
 logger = logging.getLogger(__name__)
 
-_CLOUD_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.cloud_llm_timeout,
-    write=settings.cloud_llm_timeout,
-    pool=5.0,
-)
-_EMBED_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.cloud_embedding_timeout,
-    write=settings.cloud_embedding_timeout,
-    pool=5.0,
-)
+
+def _cloud_timeout() -> httpx.Timeout:
+    t = get_setting("cloud_llm_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
+
+
+def _cloud_embed_timeout() -> httpx.Timeout:
+    t = get_setting("cloud_embedding_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
 
 
 async def _get_api_key(provider_id: str, provider_type: str) -> str | None:
@@ -43,11 +40,12 @@ def _get_base_url(provider_type: str, config: dict[str, Any]) -> str:
     if url:
         return url.rstrip("/")
     if provider_type == "openrouter":
-        return (settings.openrouter_base_url or "https://openrouter.ai/api/v1").rstrip("/")
+        return (get_setting("openrouter_base_url") or "https://openrouter.ai/api/v1").rstrip("/")
     if provider_type == "openai":
         return "https://api.openai.com/v1"
-    if provider_type == "vllm" and settings.vllm_base_url:
-        return settings.vllm_base_url.rstrip("/")
+    vllm_url = get_setting("vllm_base_url")
+    if provider_type == "vllm" and vllm_url:
+        return (vllm_url or "").rstrip("/")
     if provider_type == "anthropic":
         return "https://api.anthropic.com/v1"
     raise ValueError(f"Неизвестный провайдер или не задан base_url: {provider_type}")
@@ -101,7 +99,7 @@ async def llm_generate(
     if stop:
         body["stop"] = stop
 
-    async with httpx.AsyncClient(timeout=_CLOUD_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_cloud_timeout()) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
             headers={
@@ -147,7 +145,7 @@ async def _anthropic_chat(
         body["top_p"] = top_p
     if stop:
         body["stop_sequences"] = stop
-    async with httpx.AsyncClient(timeout=_CLOUD_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_cloud_timeout()) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -238,7 +236,7 @@ async def vlm_analyze_from_bytes(
         "messages": [{"role": "user", "content": content}],
         "max_tokens": 4096,
     }
-    async with httpx.AsyncClient(timeout=_CLOUD_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_cloud_timeout()) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
             headers={
@@ -266,7 +264,7 @@ async def embed_single(
     if not api_key and provider_type != "vllm":
         raise RuntimeError(f"API-ключ для {provider_type} не задан. Укажите в админке: Модели → Облачные.")
     base_url = _get_base_url(provider_type, config)
-    async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_cloud_embed_timeout()) as client:
         resp = await client.post(
             f"{base_url}/embeddings",
             headers={
@@ -295,7 +293,7 @@ async def embed_texts(
     if not api_key and provider_type != "vllm":
         raise RuntimeError(f"API-ключ для {provider_type} не задан. Укажите в админке: Модели → Облачные.")
     base_url = _get_base_url(provider_type, config)
-    async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_cloud_embed_timeout()) as client:
         resp = await client.post(
             f"{base_url}/embeddings",
             headers={

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   MessageSquare, Upload, Activity, Users,
-  LogOut, ChevronLeft, ChevronRight, Bot, Terminal, Cpu
+  LogOut, ChevronLeft, ChevronRight, Bot, Terminal, Cpu, Settings
 } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
@@ -15,8 +15,9 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_ITEMS = [
-  { to: '/admin', icon: Terminal, label: 'Управление' },
-  { to: '/users', icon: Users,    label: 'Пользователи' },
+  { to: '/admin',   icon: Terminal, label: 'Управление' },
+  { to: '/settings', icon: Settings, label: 'Настройки' },
+  { to: '/users',   icon: Users,    label: 'Пользователи' },
 ]
 
 export default function Sidebar() {

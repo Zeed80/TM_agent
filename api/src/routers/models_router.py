@@ -15,6 +15,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.app_settings import get_setting
 from src.auth import get_current_admin, get_current_user
 from src.config import settings
 from src.db.postgres_client import postgres_client
@@ -88,13 +89,13 @@ async def list_providers(
         # Ключ задаётся только в админке (БД), не в .env
         api_key_set = bool(r.get("api_key_set"))
         if ptype == "ollama_gpu":
-            url = (config.get("url") or settings.ollama_gpu_url).strip()
+            url = (config.get("url") or get_setting("ollama_gpu_url")).strip()
             models = await _ollama_list_models(url)
         elif ptype == "ollama_cpu":
-            url = (config.get("url") or settings.ollama_cpu_url).strip()
+            url = (config.get("url") or get_setting("ollama_cpu_url")).strip()
             models = await _ollama_list_models(url)
         elif ptype == "vllm":
-            url = (settings.vllm_base_url or "").strip().rstrip("/")
+            url = (get_setting("vllm_base_url") or "").strip().rstrip("/")
             models = await _vllm_list_models(url) if url else []
         else:
             # Облачные: ключ только из БД (админка), не из env
@@ -261,17 +262,17 @@ async def list_local_ollama(
     Список моделей по каждому инстансу Ollama (GPU и CPU).
     Для UI страницы «Локальные модели».
     """
-    gpu_models = await _ollama_list_models(settings.ollama_gpu_url)
-    cpu_models = await _ollama_list_models(settings.ollama_cpu_url)
+    gpu_models = await _ollama_list_models(get_setting("ollama_gpu_url"))
+    cpu_models = await _ollama_list_models(get_setting("ollama_cpu_url"))
     return {
         "gpu": OllamaInstanceModels(
             instance="gpu",
-            url=settings.ollama_gpu_url,
+            url=get_setting("ollama_gpu_url"),
             models=gpu_models,
         ),
         "cpu": OllamaInstanceModels(
             instance="cpu",
-            url=settings.ollama_cpu_url,
+            url=get_setting("ollama_cpu_url"),
             models=cpu_models,
         ),
     }

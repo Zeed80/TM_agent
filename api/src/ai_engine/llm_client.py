@@ -15,18 +15,15 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
+from src.app_settings import get_setting
 from src.ai_engine.vram_manager import VRAMManager
 
 logger = logging.getLogger(__name__)
 
-# Единый timeout для всех LLM-запросов (Правило 1)
-_LLM_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.llm_timeout,
-    write=settings.llm_timeout,
-    pool=5.0,
-)
+
+def _llm_timeout() -> httpx.Timeout:
+    t = get_setting("llm_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
 
 
 async def generate(
@@ -57,12 +54,14 @@ async def generate(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
+    llm_model = get_setting("llm_model")
+    num_ctx = get_setting("llm_num_ctx")
     request_body: dict[str, Any] = {
-        "model": settings.llm_model,
+        "model": llm_model,
         "messages": messages,
         "stream": False,
         "options": {
-            "num_ctx": settings.llm_num_ctx,  # Правило 2: минимум 16384
+            "num_ctx": num_ctx,  # Правило 2: минимум 16384
             "temperature": temperature,
             "top_p": top_p,
             "repeat_penalty": 1.1,
@@ -72,13 +71,13 @@ async def generate(
         request_body["options"]["stop"] = stop
 
     logger.debug(
-        f"[LLM] Запрос к {settings.llm_model}: "
-        f"{len(messages)} сообщений, num_ctx={settings.llm_num_ctx}"
+        f"[LLM] Запрос к {llm_model}: "
+        f"{len(messages)} сообщений, num_ctx={num_ctx}"
     )
 
-    async with httpx.AsyncClient(timeout=_LLM_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_llm_timeout()) as client:
         response = await client.post(
-            f"{settings.ollama_gpu_url}/api/chat",
+            f"{get_setting('ollama_gpu_url')}/api/chat",
             json=request_body,
         )
         response.raise_for_status()
@@ -108,16 +107,16 @@ async def generate_json(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    async with httpx.AsyncClient(timeout=_LLM_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_llm_timeout()) as client:
         response = await client.post(
-            f"{settings.ollama_gpu_url}/api/chat",
+            f"{get_setting('ollama_gpu_url')}/api/chat",
             json={
-                "model": settings.llm_model,
+                "model": get_setting("llm_model"),
                 "messages": messages,
                 "stream": False,
                 "format": "json",  # Принуждаем Ollama вернуть валидный JSON
                 "options": {
-                    "num_ctx": settings.llm_num_ctx,  # Правило 2
+                    "num_ctx": get_setting("llm_num_ctx"),  # Правило 2
                     "temperature": 0.0,  # Детерминированность критична для SQL/Cypher
                     "repeat_penalty": 1.1,
                 },

@@ -17,19 +17,15 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
+from src.app_settings import get_setting
 from src.ai_engine.vram_manager import VRAMManager
 
 logger = logging.getLogger(__name__)
 
-# Timeout для VLM запросов (Правило 1)
-# VLM медленнее LLM, плюс время переключения VRAM (до 90 сек)
-_VLM_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.vlm_timeout,
-    write=settings.vlm_timeout,
-    pool=5.0,
-)
+
+def _vlm_timeout() -> httpx.Timeout:
+    t = get_setting("vlm_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
 
 
 def _encode_image(image_path: str | Path) -> str:
@@ -67,11 +63,11 @@ async def analyze_blueprint(
 
     # Правило 1: use_vlm() применяет Lock и обеспечивает timeout 120s
     async with vram.use_vlm():
-        async with httpx.AsyncClient(timeout=_VLM_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_vlm_timeout()) as client:
             response = await client.post(
-                f"{settings.ollama_gpu_url}/api/chat",
+                f"{get_setting('ollama_gpu_url')}/api/chat",
                 json={
-                    "model": settings.vlm_model,
+                    "model": get_setting("vlm_model"),
                     "messages": [
                         {
                             "role": "system",
@@ -85,7 +81,7 @@ async def analyze_blueprint(
                     ],
                     "stream": False,
                     "options": {
-                        "num_ctx": settings.vlm_num_ctx,  # Правило 2
+                        "num_ctx": get_setting("vlm_num_ctx"),  # Правило 2
                         "temperature": 0.0,  # Детерминированность для технических данных
                         "repeat_penalty": 1.1,
                     },
@@ -123,11 +119,11 @@ async def analyze_blueprint_from_bytes(
     )
 
     async with vram.use_vlm():
-        async with httpx.AsyncClient(timeout=_VLM_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_vlm_timeout()) as client:
             response = await client.post(
-                f"{settings.ollama_gpu_url}/api/chat",
+                f"{get_setting('ollama_gpu_url')}/api/chat",
                 json={
-                    "model": settings.vlm_model,
+                    "model": get_setting("vlm_model"),
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {
@@ -138,7 +134,7 @@ async def analyze_blueprint_from_bytes(
                     ],
                     "stream": False,
                     "options": {
-                        "num_ctx": settings.vlm_num_ctx,  # Правило 2
+                        "num_ctx": get_setting("vlm_num_ctx"),  # Правило 2
                         "temperature": 0.0,
                     },
                 },

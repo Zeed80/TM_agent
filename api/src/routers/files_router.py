@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from src.auth import get_current_user
-from src.config import settings
+from src.app_settings import get_setting
 from src.db.postgres_client import postgres_client as _pg
 
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
@@ -107,7 +107,7 @@ async def upload_file(
 
     # Генерируем безопасное имя файла (uuid + оригинальное расширение)
     safe_filename = f"{uuid.uuid4().hex}{suffix}"
-    target_dir = Path(settings.documents_base_dir) / folder
+    target_dir = Path(get_setting("documents_base_dir")) / folder
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / safe_filename
 
@@ -215,7 +215,7 @@ async def delete_file(
 
     # Удаляем с диска
     deleted = dict(rows[0])
-    file_path = Path(settings.documents_base_dir) / deleted["folder"] / deleted["filename"]
+    file_path = Path(get_setting("documents_base_dir")) / deleted["folder"] / deleted["filename"]
     try:
         if file_path.exists():
             file_path.unlink()

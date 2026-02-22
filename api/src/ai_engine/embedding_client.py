@@ -17,17 +17,14 @@ import logging
 
 import httpx
 
-from src.config import settings
+from src.app_settings import get_setting
 
 logger = logging.getLogger(__name__)
 
-# Timeout для embedding запросов (Правило 1: 60s достаточно для CPU)
-_EMBED_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.embedding_timeout,
-    write=settings.embedding_timeout,
-    pool=5.0,
-)
+
+def _embed_timeout() -> httpx.Timeout:
+    t = get_setting("embedding_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
 
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
@@ -41,18 +38,18 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         texts: Список строк для векторизации.
 
     Returns:
-        Список float-векторов. Размерность = settings.embedding_dim.
+        Список float-векторов. Размерность = get_setting("embedding_dim").
     """
     if not texts:
         return []
 
     logger.debug(f"[Embedding] Векторизация {len(texts)} текстов")
 
-    async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_embed_timeout()) as client:
         response = await client.post(
-            f"{settings.ollama_cpu_url}/api/embed",
+            f"{get_setting('ollama_cpu_url')}/api/embed",
             json={
-                "model": settings.embedding_model,
+                "model": get_setting("embedding_model"),
                 "input": texts,
             },
         )
@@ -78,15 +75,15 @@ async def embed_single(text: str) -> list[float]:
         text: Строка для векторизации.
 
     Returns:
-        Float-вектор. Размерность = settings.embedding_dim.
+        Float-вектор. Размерность = get_setting("embedding_dim").
     """
     logger.debug(f"[Embedding] Векторизация запроса: '{text[:80]}...'")
 
-    async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_embed_timeout()) as client:
         response = await client.post(
-            f"{settings.ollama_cpu_url}/api/embeddings",
+            f"{get_setting('ollama_cpu_url')}/api/embeddings",
             json={
-                "model": settings.embedding_model,
+                "model": get_setting("embedding_model"),
                 "prompt": text,
             },
         )

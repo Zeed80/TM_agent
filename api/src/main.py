@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.ai_engine.vram_manager import VRAMManager
+from src.app_settings import get_setting, load_from_db
 from src.config import settings
 from src.db.neo4j_client import neo4j_client
 from src.db.postgres_client import postgres_client
@@ -33,6 +34,10 @@ async def lifespan(app: FastAPI):
     logger.info("Подключение к PostgreSQL...")
     await postgres_client.connect()
 
+    logger.info("Загрузка настроек из БД...")
+    await load_from_db()
+    _add_cors_middleware(app)
+
     logger.info("Подключение к Qdrant...")
     await qdrant_client.connect()
 
@@ -44,7 +49,7 @@ async def lifespan(app: FastAPI):
     from src.ai_engine.model_assignments import get_assignment
     llm_assignment = await get_assignment("llm")
     if (llm_assignment.get("provider_type") or "").strip().lower() == "ollama_gpu":
-        model_id = (llm_assignment.get("model_id") or "").strip() or settings.llm_model
+        model_id = (llm_assignment.get("model_id") or "").strip() or get_setting("llm_model")
         await vram.warm_up_llm_with_model(model_id)
     else:
         await vram.warm_up_llm()
@@ -72,15 +77,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS — разрешаем запросы с React-фронтенда ───────────────────────
-_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ── CORS — добавляется в lifespan после загрузки настроек из БД ───────
+def _add_cors_middleware(app: FastAPI) -> None:
+    origins = [o.strip() for o in (get_setting("cors_origins") or "").split(",") if o.strip()]
+    if not origins:
+        origins = ["*"]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # ── Health & root ─────────────────────────────────────────────────────
@@ -117,3 +125,5 @@ app.include_router(files_router.router)
 app.include_router(system_router.router)
 app.include_router(models_router.router)
 app.include_router(admin_router.router)
+from src.routers import settings_router  # noqa: E402
+app.include_router(settings_router.router)

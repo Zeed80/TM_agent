@@ -32,6 +32,7 @@ from src.ai_engine.prompts.blueprint_analysis import (
     BLUEPRINT_QUICK_ANALYSIS_PROMPT,
     BLUEPRINT_SYSTEM_PROMPT,
 )
+from src.app_settings import get_setting
 from src.config import settings
 from src.db import qdrant_client as _qdrant
 from src.models.sql_models import BlueprintVisionRequest, BlueprintVisionResponse
@@ -268,12 +269,12 @@ async def _save_new_blueprint_to_graph(
     tools = drawing_data.get("required_tools") or []
 
     await _qdrant.qdrant_client.client.upsert(
-        collection_name=settings.qdrant_collection,
+        collection_name=get_setting("qdrant_collection"),
         points=[{
             "id": chunk_id,
             "vectors": {
-                settings.qdrant_dense_vector_name: dense_vector,
-                settings.qdrant_sparse_vector_name: sparse_vector,
+                get_setting("qdrant_dense_vector_name"): dense_vector,
+                get_setting("qdrant_sparse_vector_name"): sparse_vector,
             },
             "payload": {
                 "text": text_description,

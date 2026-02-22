@@ -32,8 +32,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from src.app_settings import get_setting
 from src.auth import get_current_admin
-from src.config import settings
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -439,8 +439,8 @@ async def pull_ollama_model(
     }
     gpu_models = {m for m in gpu_models if m}
     if not gpu_models:
-        gpu_models = {settings.llm_model, settings.vlm_model}
-    target_url = settings.ollama_gpu_url if model_name in gpu_models else settings.ollama_cpu_url
+        gpu_models = {get_setting("llm_model"), get_setting("vlm_model")}
+    target_url = get_setting("ollama_gpu_url") if model_name in gpu_models else get_setting("ollama_cpu_url")
 
     return StreamingResponse(
         _ollama_pull_stream(model_name, target_url),

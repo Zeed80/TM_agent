@@ -13,36 +13,30 @@ from typing import Any
 
 import httpx
 
-from src.config import settings
+from src.app_settings import get_setting
 from src.ai_engine.vram_manager import VRAMManager
 
 logger = logging.getLogger(__name__)
 
-# Таймауты из конфига
-_LLM_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.llm_timeout,
-    write=settings.llm_timeout,
-    pool=5.0,
-)
-_VLM_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.vlm_timeout,
-    write=settings.vlm_timeout,
-    pool=5.0,
-)
-_EMBED_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.embedding_timeout,
-    write=settings.embedding_timeout,
-    pool=5.0,
-)
-_RERANK_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=settings.reranker_timeout,
-    write=settings.reranker_timeout,
-    pool=5.0,
-)
+
+def _llm_timeout() -> httpx.Timeout:
+    t = get_setting("llm_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
+
+
+def _vlm_timeout() -> httpx.Timeout:
+    t = get_setting("vlm_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
+
+
+def _embed_timeout() -> httpx.Timeout:
+    t = get_setting("embedding_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
+
+
+def _rerank_timeout() -> httpx.Timeout:
+    t = get_setting("reranker_timeout")
+    return httpx.Timeout(connect=10.0, read=t, write=t, pool=5.0)
 
 _RERANK_PROMPT_TEMPLATE = (
     "Given a query and a document, determine if the document is relevant to the query.\n"
@@ -74,7 +68,7 @@ class OllamaLLMProvider:
     def __init__(self, url: str, model_id: str):
         self._url = url.rstrip("/")
         self._model_id = model_id
-        self._num_ctx = settings.llm_num_ctx
+        self._num_ctx = get_setting("llm_num_ctx")
 
     async def generate(
         self,
@@ -106,7 +100,7 @@ class OllamaLLMProvider:
         if stop:
             body["options"] = body.get("options", {}) | {"stop": stop}
 
-        async with httpx.AsyncClient(timeout=_LLM_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_llm_timeout()) as client:
             resp = await client.post(f"{self._url}/api/chat", json=body)
             resp.raise_for_status()
             data = resp.json()
@@ -121,7 +115,7 @@ class OllamaLLMProvider:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        async with httpx.AsyncClient(timeout=_LLM_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_llm_timeout()) as client:
             resp = await client.post(
                 f"{self._url}/api/chat",
                 json={
@@ -147,7 +141,7 @@ class OllamaVLMProvider:
     def __init__(self, url: str, model_id: str):
         self._url = url.rstrip("/")
         self._model_id = model_id
-        self._num_ctx = settings.vlm_num_ctx
+        self._num_ctx = get_setting("vlm_num_ctx")
 
     @staticmethod
     def _encode_image(image_path: str | Path) -> str:
@@ -163,7 +157,7 @@ class OllamaVLMProvider:
         vram = VRAMManager()
         image_b64 = self._encode_image(image_path)
         async with vram.use_vlm_for_model(self._model_id):
-            async with httpx.AsyncClient(timeout=_VLM_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=_vlm_timeout()) as client:
                 resp = await client.post(
                     f"{self._url}/api/chat",
                     json={
@@ -190,7 +184,7 @@ class OllamaVLMProvider:
         vram = VRAMManager()
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         async with vram.use_vlm_for_model(self._model_id):
-            async with httpx.AsyncClient(timeout=_VLM_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=_vlm_timeout()) as client:
                 resp = await client.post(
                     f"{self._url}/api/chat",
                     json={
@@ -218,7 +212,7 @@ class OllamaEmbeddingProvider:
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_embed_timeout()) as client:
             resp = await client.post(
                 f"{self._url}/api/embed",
                 json={"model": self._model_id, "input": texts},
@@ -228,7 +222,7 @@ class OllamaEmbeddingProvider:
         return data.get("embeddings", [])
 
     async def embed_single(self, text: str) -> list[float]:
-        async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=_embed_timeout()) as client:
             resp = await client.post(
                 f"{self._url}/api/embeddings",
                 json={"model": self._model_id, "prompt": text},
@@ -254,7 +248,7 @@ class OllamaRerankerProvider:
                 query=query,
                 document=doc[:2000],
             )
-            async with httpx.AsyncClient(timeout=_RERANK_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=_rerank_timeout()) as client:
                 resp = await client.post(
                     f"{self._url}/api/generate",
                     json={

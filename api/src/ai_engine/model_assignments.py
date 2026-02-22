@@ -9,7 +9,7 @@
 import logging
 from typing import Any
 
-from src.config import settings
+from src.app_settings import get_setting
 from src.db.postgres_client import postgres_client
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,6 @@ CLOUD_PROVIDER_TYPES = frozenset({
 
 # Роли моделей
 ROLES = ("llm", "vlm", "embedding", "reranker")
-
-# Дефолтные назначения из env (provider_type -> model_id для каждой роли)
-_DEFAULT_OLLAMA_GPU_MODELS = {"llm": settings.llm_model, "vlm": settings.vlm_model}
-_DEFAULT_OLLAMA_CPU_MODELS = {
-    "embedding": settings.embedding_model,
-    "reranker": settings.reranker_model,
-}
 # UUID провайдеров по умолчанию (из сидера 03_model_providers.sql)
 _DEFAULT_OLLAMA_GPU_PROVIDER_ID = "a0000001-0000-4000-8000-000000000001"
 _DEFAULT_OLLAMA_CPU_PROVIDER_ID = "a0000001-0000-4000-8000-000000000002"
@@ -101,34 +94,36 @@ async def get_all_assignments() -> dict[str, dict[str, Any]]:
 
 
 def _fallback_assignments() -> dict[str, dict[str, Any]]:
-    """Назначения из settings (Ollama GPU/CPU)."""
+    """Назначения из настроек (БД или .env)."""
+    gpu_url = get_setting("ollama_gpu_url")
+    cpu_url = get_setting("ollama_cpu_url")
     return {
         "llm": {
             "provider_id": _DEFAULT_OLLAMA_GPU_PROVIDER_ID,
             "provider_type": "ollama_gpu",
-            "model_id": settings.llm_model,
-            "config": {"url": settings.ollama_gpu_url},
+            "model_id": get_setting("llm_model"),
+            "config": {"url": gpu_url},
             "is_cloud": False,
         },
         "vlm": {
             "provider_id": _DEFAULT_OLLAMA_GPU_PROVIDER_ID,
             "provider_type": "ollama_gpu",
-            "model_id": settings.vlm_model,
-            "config": {"url": settings.ollama_gpu_url},
+            "model_id": get_setting("vlm_model"),
+            "config": {"url": gpu_url},
             "is_cloud": False,
         },
         "embedding": {
             "provider_id": _DEFAULT_OLLAMA_CPU_PROVIDER_ID,
             "provider_type": "ollama_cpu",
-            "model_id": settings.embedding_model,
-            "config": {"url": settings.ollama_cpu_url},
+            "model_id": get_setting("embedding_model"),
+            "config": {"url": cpu_url},
             "is_cloud": False,
         },
         "reranker": {
             "provider_id": _DEFAULT_OLLAMA_CPU_PROVIDER_ID,
             "provider_type": "ollama_cpu",
-            "model_id": settings.reranker_model,
-            "config": {"url": settings.ollama_cpu_url},
+            "model_id": get_setting("reranker_model"),
+            "config": {"url": cpu_url},
             "is_cloud": False,
         },
     }

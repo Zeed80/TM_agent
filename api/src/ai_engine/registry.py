@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 def _ollama_url(config: dict[str, Any]) -> str:
+    from src.app_settings import get_setting
     url = (config.get("url") or "").strip()
     if not url:
-        from src.config import settings
-        return settings.ollama_gpu_url  # fallback
+        return get_setting("ollama_gpu_url")
     return url
 
 
@@ -67,8 +67,8 @@ async def generate(
         )
 
     # Fallback: Ollama GPU из настроек
-    from src.config import settings
-    prov = OllamaLLMProvider(url=settings.ollama_gpu_url, model_id=model_id or settings.llm_model)
+    from src.app_settings import get_setting
+    prov = OllamaLLMProvider(url=get_setting("ollama_gpu_url"), model_id=model_id or get_setting("llm_model"))
     return await prov.generate(
         prompt=prompt,
         system_prompt=system_prompt,
@@ -100,8 +100,8 @@ async def generate_json_llm(prompt: str, system_prompt: str | None = None) -> st
             system_prompt=system_prompt,
         )
 
-    from src.config import settings
-    prov = OllamaLLMProvider(url=settings.ollama_gpu_url, model_id=model_id or settings.llm_model)
+    from src.app_settings import get_setting
+    prov = OllamaLLMProvider(url=get_setting("ollama_gpu_url"), model_id=model_id or get_setting("llm_model"))
     return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
 
 

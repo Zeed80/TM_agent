@@ -33,6 +33,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from src.app_settings import get_setting
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ class QdrantClientWrapper:
           - "dense": qwen3-embedding, cosine distance, размер = EMBEDDING_DIM
           - "bm25": fastembed BM25, sparse, on_disk=False (in-memory для скорости)
         """
-        collection_name = settings.qdrant_collection
+        collection_name = get_setting("qdrant_collection")
 
         collections = await self._client.get_collections()
         existing = [c.name for c in collections.collections]
@@ -102,24 +103,27 @@ class QdrantClientWrapper:
             logger.info(f"[Qdrant] Коллекция '{collection_name}' уже существует")
             return
 
+        dense_dim = get_setting("embedding_dim")
+        dense_name = get_setting("qdrant_dense_vector_name")
+        sparse_name = get_setting("qdrant_sparse_vector_name")
         logger.info(
             f"[Qdrant] Создание коллекции '{collection_name}' "
-            f"(dense_dim={settings.embedding_dim}, sparse=BM25)"
+            f"(dense_dim={dense_dim}, sparse=BM25)"
         )
 
         await self._client.create_collection(
             collection_name=collection_name,
             # Правило 3: Dense vectors (qwen3-embedding)
             vectors_config={
-                settings.qdrant_dense_vector_name: VectorParams(
-                    size=settings.embedding_dim,
+                dense_name: VectorParams(
+                    size=dense_dim,
                     distance=Distance.COSINE,
                     on_disk=False,  # Держим в RAM для скорости поиска
                 )
             },
             # Правило 3: Sparse vectors (BM25) — ОБЯЗАТЕЛЬНО
             sparse_vectors_config={
-                settings.qdrant_sparse_vector_name: SparseVectorParams(
+                sparse_name: SparseVectorParams(
                     index=SparseIndexParams(on_disk=False)  # in-memory BM25-индекс
                 )
             },
@@ -152,14 +156,17 @@ class QdrantClientWrapper:
             **metadata,
         }
 
+        coll = get_setting("qdrant_collection")
+        dense_name = get_setting("qdrant_dense_vector_name")
+        sparse_name = get_setting("qdrant_sparse_vector_name")
         await self._client.upsert(
-            collection_name=settings.qdrant_collection,
+            collection_name=coll,
             points=[
                 {
                     "id": chunk_id,
                     "vectors": {
-                        settings.qdrant_dense_vector_name: dense_vector,
-                        settings.qdrant_sparse_vector_name: {
+                        dense_name: dense_vector,
+                        sparse_name: {
                             "indices": sparse_vector.indices,
                             "values": sparse_vector.values,
                         },
@@ -190,14 +197,17 @@ class QdrantClientWrapper:
         texts = [c["text"] for c in chunks]
         sparse_vectors = _compute_bm25(texts)
 
+        coll = get_setting("qdrant_collection")
+        dense_name = get_setting("qdrant_dense_vector_name")
+        sparse_name = get_setting("qdrant_sparse_vector_name")
         points = []
         for chunk, sparse_vec in zip(chunks, sparse_vectors):
             points.append(
                 {
                     "id": chunk["id"],
                     "vectors": {
-                        settings.qdrant_dense_vector_name: chunk["dense_vector"],
-                        settings.qdrant_sparse_vector_name: {
+                        dense_name: chunk["dense_vector"],
+                        sparse_name: {
                             "indices": list(sparse_vec.indices),
                             "values": list(sparse_vec.values),
                         },
@@ -210,7 +220,7 @@ class QdrantClientWrapper:
             )
 
         await self._client.upsert(
-            collection_name=settings.qdrant_collection,
+            collection_name=coll,
             points=points,
         )
         logger.debug(f"[Qdrant] Upsert {len(points)} документов")
@@ -242,35 +252,39 @@ class QdrantClientWrapper:
         Returns:
             Список ScoredPoint с payload (включая "text" для reranker).
         """
+        prefetch_limit = get_setting("qdrant_prefetch_limit")
         if top_k is None:
-            top_k = settings.qdrant_prefetch_limit
+            top_k = prefetch_limit
 
         sparse_vector = _compute_bm25_single(query_text)
+        dense_name = get_setting("qdrant_dense_vector_name")
+        sparse_name = get_setting("qdrant_sparse_vector_name")
+        coll = get_setting("qdrant_collection")
 
         # Правило 3: Двойной prefetch + RRF
         prefetch = [
             # Dense prefetch (семантическое сходство)
             Prefetch(
                 query=NamedVector(
-                    name=settings.qdrant_dense_vector_name,
+                    name=dense_name,
                     vector=dense_vector,
                 ),
-                limit=settings.qdrant_prefetch_limit,
+                limit=prefetch_limit,
                 filter=filter_conditions,
             ),
             # Sparse prefetch (BM25 keyword matching)
             Prefetch(
                 query=NamedSparseVector(
-                    name=settings.qdrant_sparse_vector_name,
+                    name=sparse_name,
                     vector=sparse_vector,
                 ),
-                limit=settings.qdrant_prefetch_limit,
+                limit=prefetch_limit,
                 filter=filter_conditions,
             ),
         ]
 
         results = await self._client.query_points(
-            collection_name=settings.qdrant_collection,
+            collection_name=coll,
             prefetch=prefetch,
             query=Fusion.RRF,  # Reciprocal Rank Fusion — объединяет оба списка
             limit=top_k,

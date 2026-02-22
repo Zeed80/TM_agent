@@ -23,9 +23,18 @@ if [ -f /opt/openclaw-config/openclaw.json ]; then
     cp /opt/openclaw-config/openclaw.json "$CONFIG_DEST"
 else
     echo "[openclaw] No openclaw.json on host, using default config (OpenClaw 2026 schema)"
-    # Модель из env (совпадает с API/PRD); Ollama в Docker — по имени сервиса
+    # Модель: приоритет — из API (настройки в Web UI), иначе из env
     OC_MODEL="${LLM_MODEL:-qwen3:30b}"
-    echo "[openclaw] LLM model: ollama/${OC_MODEL}"
+    if _api_model=$(curl -sf "http://api:8000/api/v1/settings/public" 2>/dev/null | jq -r '.llm_model // empty'); then
+        if [ -n "$_api_model" ]; then
+            OC_MODEL="$_api_model"
+            echo "[openclaw] LLM model from API (Web UI): ollama/${OC_MODEL}"
+        else
+            echo "[openclaw] LLM model from env: ollama/${OC_MODEL}"
+        fi
+    else
+        echo "[openclaw] LLM model from env: ollama/${OC_MODEL}"
+    fi
     # Формируем JSON: gateway, agents (workspace + model), channels, models.providers.ollama
     _gateway='{"mode":"local","port":18789,"bind":"lan"}'
     _agents_workspace='"/root/.openclaw/workspace"'

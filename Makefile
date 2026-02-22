@@ -115,6 +115,8 @@ init-pg: ## Применить схему users/chat и model_providers к су�
 	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/03_model_providers.sql
 	@echo "→ Колонка encrypted_api_key для ключей провайдеров..."
 	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/04_provider_api_keys.sql
+	@echo "→ Таблица app_settings для настроек из Web UI..."
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/05_app_settings.sql
 	@echo "✓ Схема PostgreSQL применена. Создай admin: make create-admin"
 
 init-qdrant: ## Создать коллекцию Qdrant с Sparse + Dense векторами
