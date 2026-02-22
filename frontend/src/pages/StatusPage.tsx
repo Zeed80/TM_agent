@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, CheckCircle, XCircle, Clock, Database,
-  Cpu, HardDrive, RefreshCw, Zap, Server
+  Cpu, HardDrive, RefreshCw, Zap, Server, Cloud
 } from 'lucide-react'
 import { api } from '../api/client'
-import type { SystemStatus } from '../types'
+import type { SystemStatus, AssignmentsResponse } from '../types'
 import clsx from 'clsx'
 
 function ServiceCard({ service }: { service: SystemStatus['services'][number] }) {
@@ -54,6 +54,12 @@ export default function StatusPage() {
   } = useQuery<SystemStatus>({
     queryKey: ['system-status'],
     queryFn: () => api.get<SystemStatus>('/system/status'),
+    refetchInterval: 30_000,
+  })
+
+  const { data: assignments } = useQuery<AssignmentsResponse>({
+    queryKey: ['models', 'assignments'],
+    queryFn: () => api.get<AssignmentsResponse>('/models/assignments'),
     refetchInterval: 30_000,
   })
 
@@ -143,15 +149,30 @@ export default function StatusPage() {
                 Конфигурация моделей
               </h2>
               <div className="card divide-y divide-surface-700">
-                {[
-                  { label: 'LLM (GPU)', value: status.llm_model },
-                  { label: 'VLM (GPU)', value: status.vlm_model },
-                  { label: 'Embedding (CPU)', value: status.embedding_model },
-                  { label: 'Reranker (CPU)', value: status.reranker_model },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex items-center justify-between px-4 py-3">
+                {(assignments
+                  ? [
+                      { label: 'LLM (GPU)', a: assignments.llm },
+                      { label: 'VLM (GPU)', a: assignments.vlm },
+                      { label: 'Embedding (CPU)', a: assignments.embedding },
+                      { label: 'Reranker (CPU)', a: assignments.reranker },
+                    ]
+                  : [
+                      { label: 'LLM (GPU)', a: { model_id: status.llm_model, is_cloud: false } },
+                      { label: 'VLM (GPU)', a: { model_id: status.vlm_model, is_cloud: false } },
+                      { label: 'Embedding (CPU)', a: { model_id: status.embedding_model, is_cloud: false } },
+                      { label: 'Reranker (CPU)', a: { model_id: status.reranker_model, is_cloud: false } },
+                    ]
+                ).map(({ label, a }) => (
+                  <div key={label} className="flex items-center justify-between px-4 py-3 gap-2">
                     <span className="text-sm text-slate-400">{label}</span>
-                    <code className="text-sm font-mono text-accent-light">{value}</code>
+                    <span className="flex items-center gap-2 min-w-0">
+                      {a.is_cloud && (
+                        <span className="shrink-0 text-amber-400" title="Облачная модель">
+                          <Cloud size={14} />
+                        </span>
+                      )}
+                      <code className="text-sm font-mono text-accent-light truncate">{a.model_id}</code>
+                    </span>
                   </div>
                 ))}
               </div>

@@ -108,10 +108,12 @@ init-db: ## Инициализировать схему Neo4j (constraints + ind
 		-f /var/lib/neo4j/import/init.cypher
 	@echo "✓ Схема Neo4j инициализирована"
 
-init-pg: ## Применить схему users/chat (02_users.sql) к существующей БД. Нужно после teardown или если таблицы users нет.
+init-pg: ## Применить схему users/chat и model_providers к существующей БД. Нужно после teardown или если таблиц нет.
 	@echo "→ Применение схемы users, chat_sessions, chat_messages, uploaded_files..."
 	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/02_users.sql
-	@echo "✓ Схема PostgreSQL (users) применена. Создай admin: make create-admin"
+	@echo "→ Применение схемы model_providers, model_assignments..."
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/03_model_providers.sql
+	@echo "✓ Схема PostgreSQL применена. Создай admin: make create-admin"
 
 init-qdrant: ## Создать коллекцию Qdrant с Sparse + Dense векторами
 	@echo "→ Инициализация коллекции Qdrant..."

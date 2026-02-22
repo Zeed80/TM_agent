@@ -64,6 +64,29 @@ services:
       start_period: 30s
 
   # ─────────────────────────────────────────────
+  # VLLM — локальный OpenAI-совместимый API (опционально: docker compose --profile vllm up)
+  # Задайте VLLM_BASE_URL=http://vllm:8000/v1 в env API для выбора моделей vLLM в UI.
+  # ─────────────────────────────────────────────
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm
+    profiles: ["vllm"]
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      - VLLM_MODEL=${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - enterprise-net
+
+  # ─────────────────────────────────────────────
   # QDRANT — Векторная БД для документов
   # Hybrid Search: Sparse (BM25) + Dense vectors (правило 3)
   # ─────────────────────────────────────────────
@@ -133,6 +156,7 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./infra/postgres/01_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
       - ./infra/postgres/02_users.sql:/docker-entrypoint-initdb.d/02_users.sql:ro
+      - ./infra/postgres/03_model_providers.sql:/docker-entrypoint-initdb.d/03_model_providers.sql:ro
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}

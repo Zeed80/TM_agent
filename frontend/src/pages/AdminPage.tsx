@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Server, RefreshCw, Play, Square, RotateCcw, FileText,
-  Cpu, HardDrive, MemoryStick, Clock, Zap, Download,
+  Cpu, HardDrive, MemoryStick, Clock, Zap,
   ChevronRight, AlertCircle, CheckCircle, XCircle,
   PackageOpen, Database, X, Loader2, Activity,
   Terminal, ChevronDown
 } from 'lucide-react'
-import { api, getToken, ApiError } from '../api/client'
+import { api } from '../api/client'
 import clsx from 'clsx'
 
 // ── Типы ─────────────────────────────────────────────────────────────
@@ -414,101 +415,6 @@ function SystemMetricsBar({ data }: { data: SystemInfo }) {
   )
 }
 
-// ── Компонент: pull модели ────────────────────────────────────────────
-function PullModelPanel() {
-  const [model, setModel] = useState('')
-  const [logs, setLogs] = useState<string[]>([])
-  const [running, setRunning] = useState(false)
-  const abortRef = useRef<AbortController | null>(null)
-
-  const handlePull = async () => {
-    if (!model.trim() || running) return
-    if (abortRef.current) abortRef.current.abort()
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-    setLogs([])
-    setRunning(true)
-
-    try {
-      const token = getToken()
-      const res = await fetch('/api/v1/admin/ollama/pull', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ model: model.trim() }),
-        signal: ctrl.signal,
-      })
-      if (!res.body) return
-      const reader = res.body.getReader()
-      const dec = new TextDecoder()
-      let buf = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        const parts = buf.split('\n')
-        buf = parts.pop() ?? ''
-        for (const p of parts) {
-          if (p.startsWith('data: ')) {
-            try {
-              const ev = JSON.parse(p.slice(6))
-              if (ev.type === 'progress' && ev.data?.status) {
-                const line = ev.data.completed != null && ev.data.total != null
-                  ? `${ev.data.status}: ${Math.round((ev.data.completed / ev.data.total) * 100)}%`
-                  : ev.data.status
-                setLogs((prev) => {
-                  const last = prev[prev.length - 1] ?? ''
-                  if (last.startsWith(ev.data.status.split(':')[0])) {
-                    return [...prev.slice(0, -1), line]
-                  }
-                  return [...prev, line]
-                })
-              } else if (ev.type === 'done') {
-                setLogs((prev) => [...prev, '✓ Загрузка завершена'])
-              } else if (ev.type === 'error') {
-                setLogs((prev) => [...prev, `✗ Ошибка: ${ev.detail}`])
-              }
-            } catch {}
-          }
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        setLogs((prev) => [...prev, `Ошибка: ${err}`])
-      }
-    } finally {
-      setRunning(false)
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Загрузить модель Ollama</h3>
-      <div className="flex gap-2">
-        <input
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder="qwen3:30b, qwen3-embedding, ..."
-          className="input-field flex-1 text-sm"
-          onKeyDown={(e) => e.key === 'Enter' && handlePull()}
-          disabled={running}
-        />
-        <button onClick={handlePull} disabled={!model.trim() || running} className="btn-primary">
-          {running ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          Pull
-        </button>
-      </div>
-      {logs.length > 0 && (
-        <div className="bg-surface-950 rounded-lg p-3 font-mono text-xs text-green-300 space-y-0.5 max-h-32 overflow-y-auto">
-          {logs.map((l, i) => <div key={i}>{l}</div>)}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Главная страница ──────────────────────────────────────────────────
 export default function AdminPage() {
   const qc = useQueryClient()
@@ -614,8 +520,12 @@ export default function AdminPage() {
           <div className="card p-5 space-y-5">
             <h2 className="text-sm font-semibold text-slate-200">Быстрые действия</h2>
 
-            {/* Pull модели */}
-            <PullModelPanel />
+            {/* Загрузка моделей Ollama — на странице «Модели» */}
+            <div className="text-sm text-slate-400">
+              Загрузка и выбор моделей Ollama: страница{' '}
+              <Link to="/models" className="text-accent-light hover:underline font-medium">Модели</Link>
+              {' '}→ вкладка «Локальные».
+            </div>
 
             {/* ETL */}
             <div>

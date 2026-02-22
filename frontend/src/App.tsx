@@ -5,6 +5,7 @@ import { getToken } from './api/client'
 import LoginPage from './pages/LoginPage'
 import ChatPage from './pages/ChatPage'
 import UploadPage from './pages/UploadPage'
+import ModelsPage from './pages/ModelsPage'
 import StatusPage from './pages/StatusPage'
 import UsersPage from './pages/UsersPage'
 import AdminPage from './pages/AdminPage'
@@ -44,6 +45,7 @@ export default function App() {
           <Route index element={<Navigate to="/chat" replace />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="upload" element={<UploadPage />} />
+          <Route path="models" element={<ModelsPage />} />
           <Route path="status" element={<StatusPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="admin" element={<AdminPage />} />

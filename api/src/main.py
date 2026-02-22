@@ -41,7 +41,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("Прогрев LLM в VRAM (это может занять до 60 секунд)...")
     vram = VRAMManager()
-    await vram.warm_up_llm()
+    from src.ai_engine.model_assignments import get_assignment
+    llm_assignment = await get_assignment("llm")
+    if (llm_assignment.get("provider_type") or "").strip().lower() == "ollama_gpu":
+        model_id = (llm_assignment.get("model_id") or "").strip() or settings.llm_model
+        await vram.warm_up_llm_with_model(model_id)
+    else:
+        await vram.warm_up_llm()
 
     logger.info("=== Все системы готовы. API принимает запросы. ===")
 
@@ -103,10 +109,11 @@ app.include_router(blueprint_vision.router, prefix="/skills")
 app.include_router(inventory_sql.router, prefix="/skills")
 
 # ── Web API (авторизованные) ─────────────────────────────────────────
-from src.routers import auth_router, chat_router, files_router, system_router, admin_router  # noqa: E402
+from src.routers import auth_router, chat_router, files_router, system_router, admin_router, models_router  # noqa: E402
 
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(files_router.router)
 app.include_router(system_router.router)
+app.include_router(models_router.router)
 app.include_router(admin_router.router)

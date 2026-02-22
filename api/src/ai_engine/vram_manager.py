@@ -60,20 +60,27 @@ class VRAMManager:
         """
         Вызывается при старте FastAPI (lifespan).
         Загружает LLM в VRAM с keep_alive=-1 (не выгружать автоматически).
-        После этого LLM всегда готова к запросам без задержки.
+        По умолчанию использует settings.llm_model.
+        """
+        await self.warm_up_llm_with_model(settings.llm_model)
+
+    async def warm_up_llm_with_model(self, model_id: str) -> None:
+        """
+        Прогрев указанной LLM-модели в VRAM.
+        Используется при старте, если назначение из реестра — Ollama GPU.
         """
         if self._initialized:
             logger.info("[VRAM] Уже инициализирован, пропускаем прогрев")
             return
 
-        logger.info(f"[VRAM] Прогрев LLM: {settings.llm_model} (num_ctx={settings.llm_num_ctx})")
+        logger.info(f"[VRAM] Прогрев LLM: {model_id} (num_ctx={settings.llm_num_ctx})")
         await self._load_model(
-            model=settings.llm_model,
+            model=model_id,
             num_ctx=settings.llm_num_ctx,
         )
-        self._current_model = settings.llm_model
+        self._current_model = model_id
         self._initialized = True
-        logger.info(f"[VRAM] LLM готова: {settings.llm_model}")
+        logger.info(f"[VRAM] LLM готова: {model_id}")
 
     async def ensure_llm(self) -> None:
         """
@@ -82,15 +89,20 @@ class VRAMManager:
         Если LLM уже загружена — возвращается немедленно (без блокировки).
         Если VLM загружена — ждёт освобождения Lock, затем переключается.
         """
-        if self._current_model == settings.llm_model:
-            return  # LLM уже активна — быстрый путь без Lock
+        await self.ensure_llm_for_model(settings.llm_model)
 
+    async def ensure_llm_for_model(self, model_id: str) -> None:
+        """
+        Гарантирует, что в VRAM загружена указанная LLM-модель.
+        Используется реестром при выборе модели из назначений.
+        """
+        if self._current_model == model_id:
+            return
         logger.info("[VRAM] LLM не активна — ожидаю освобождения Lock для переключения")
         async with self._lock:
-            # Двойная проверка: другой корутин мог уже переключить за время ожидания
-            if self._current_model != settings.llm_model:
+            if self._current_model != model_id:
                 await self._swap_to(
-                    target_model=settings.llm_model,
+                    target_model=model_id,
                     num_ctx=settings.llm_num_ctx,
                 )
 
@@ -106,23 +118,40 @@ class VRAMManager:
             async with vram_manager.use_vlm():
                 result = await vlm_client.analyze_blueprint(image_b64)
         """
+        async with self.use_vlm_for_model(settings.vlm_model) as _:
+            yield
+
+    @asynccontextmanager
+    async def use_vlm_for_model(self, vlm_model_id: str) -> AsyncIterator[None]:
+        """
+        Контекст-менеджер для VLM с указанной моделью.
+        В finally восстанавливает LLM из назначений (если провайдер ollama_gpu).
+        """
+        from src.ai_engine.model_assignments import get_assignment
+
+        assignment = await get_assignment("llm")
+        restore_model: str | None = None
+        if assignment.get("provider_type") == "ollama_gpu":
+            restore_model = (assignment.get("model_id") or "").strip() or settings.llm_model
+
         logger.info("[VRAM] Запрос на VLM — ожидаю Lock...")
         async with self._lock:
             logger.info("[VRAM] Lock получен — переключаюсь на VLM")
             try:
                 await self._swap_to(
-                    target_model=settings.vlm_model,
+                    target_model=vlm_model_id,
                     num_ctx=settings.vlm_num_ctx,
                 )
                 logger.info("[VRAM] VLM активна — передаю управление")
                 yield
             finally:
                 logger.info("[VRAM] VLM завершила работу — восстанавливаю LLM")
-                await self._swap_to(
-                    target_model=settings.llm_model,
-                    num_ctx=settings.llm_num_ctx,
-                )
-                logger.info("[VRAM] LLM восстановлена")
+                if restore_model:
+                    await self._swap_to(
+                        target_model=restore_model,
+                        num_ctx=settings.llm_num_ctx,
+                    )
+                    logger.info("[VRAM] LLM восстановлена")
         # Lock освобождён автоматически после выхода из блока async with
 
     async def _swap_to(self, target_model: str, num_ctx: int) -> None:

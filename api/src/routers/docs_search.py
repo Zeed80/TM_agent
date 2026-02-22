@@ -11,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from src.ai_engine import embedding_client, llm_client, reranker_client
+from src.ai_engine import registry
 from src.db.qdrant_client import qdrant_client
 from src.models.sql_models import DocsSearchRequest, DocsSearchResponse
 
@@ -44,7 +44,7 @@ async def docs_search(request: DocsSearchRequest) -> DocsSearchResponse:
 
     # ── Шаг 1: Векторизация запроса ──────────────────────────────────
     try:
-        dense_vector = await embedding_client.embed_single(request.question)
+        dense_vector = await registry.embed_single(request.question)
     except Exception as exc:
         logger.error(f"[docs-search] Ошибка embedding: {exc}")
         raise HTTPException(
@@ -89,7 +89,7 @@ async def docs_search(request: DocsSearchRequest) -> DocsSearchResponse:
     ]
 
     try:
-        scores = await reranker_client.rerank_batch(
+        scores = await registry.rerank_batch(
             query=request.question,
             documents=candidate_texts,
         )
@@ -101,7 +101,7 @@ async def docs_search(request: DocsSearchRequest) -> DocsSearchResponse:
         scores = [1.0 - i * 0.05 for i in range(len(candidates))]
 
     # Берём top_k лучших после reranking
-    top_results = reranker_client.sort_by_scores(
+    top_results = registry.sort_by_scores(
         items=candidates,
         scores=scores,
         top_k=request.top_k,
@@ -144,7 +144,7 @@ async def docs_search(request: DocsSearchRequest) -> DocsSearchResponse:
     )
 
     try:
-        answer = await llm_client.generate(
+        answer = await registry.generate(
             prompt=synthesis_prompt,
             system_prompt=_SYNTHESIS_SYSTEM_PROMPT,
             temperature=0.1,

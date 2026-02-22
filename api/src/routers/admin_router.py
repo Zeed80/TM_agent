@@ -430,8 +430,16 @@ async def pull_ollama_model(
     if not model_name:
         raise HTTPException(status_code=400, detail="Имя модели не указано")
 
-    # Определяем target Ollama (GPU или CPU)
-    gpu_models = {settings.llm_model, settings.vlm_model}
+    # Определяем target Ollama (GPU или CPU) по назначениям или env
+    from src.ai_engine.model_assignments import get_all_assignments
+    assignments = await get_all_assignments()
+    gpu_models = {
+        (assignments.get("llm") or {}).get("model_id"),
+        (assignments.get("vlm") or {}).get("model_id"),
+    }
+    gpu_models = {m for m in gpu_models if m}
+    if not gpu_models:
+        gpu_models = {settings.llm_model, settings.vlm_model}
     target_url = settings.ollama_gpu_url if model_name in gpu_models else settings.ollama_cpu_url
 
     return StreamingResponse(

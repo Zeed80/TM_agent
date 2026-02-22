@@ -91,3 +91,34 @@ export interface SystemStatus {
   embedding_model: string
   reranker_model: string
 }
+
+// ─── Models (реестр провайдеров и назначений) ────────────────────────
+export interface ProviderInfo {
+  id: string
+  type: string
+  name: string
+  config: Record<string, unknown>
+  api_key_set: boolean
+  models: string[]
+}
+
+export interface AssignmentItem {
+  role: string
+  provider_id: string
+  provider_type: string
+  model_id: string
+  is_cloud: boolean
+}
+
+export interface AssignmentsResponse {
+  llm: AssignmentItem
+  vlm: AssignmentItem
+  embedding: AssignmentItem
+  reranker: AssignmentItem
+}
+
+export interface OllamaInstanceModels {
+  instance: string
+  url: string
+  models: string[]
+}

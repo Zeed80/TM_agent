@@ -16,7 +16,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from src.ai_engine import llm_client
+from src.ai_engine import registry
 from src.ai_engine.prompts.text_to_cypher import (
     FEW_SHOT_EXAMPLES,
     SYSTEM_PROMPT,
@@ -59,7 +59,7 @@ async def graph_search(request: GraphSearchRequest) -> GraphSearchResponse:
         user_prompt = FEW_SHOT_EXAMPLES + "\n\n" + user_prompt
 
     try:
-        raw_json = await llm_client.generate_json(
+        raw_json = await registry.generate_json_llm(
             prompt=user_prompt,
             system_prompt=SYSTEM_PROMPT,
         )
@@ -117,7 +117,7 @@ async def graph_search(request: GraphSearchRequest) -> GraphSearchResponse:
         )
 
     try:
-        answer = await llm_client.generate(
+        answer = await registry.generate(
             prompt=synthesis_prompt,
             system_prompt=_SYNTHESIS_SYSTEM_PROMPT,
             temperature=0.1,  # Чуть больше 0 для естественного языка

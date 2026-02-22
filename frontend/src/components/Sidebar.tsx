@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   MessageSquare, Upload, Activity, Users,
-  LogOut, ChevronLeft, ChevronRight, Bot, Terminal
+  LogOut, ChevronLeft, ChevronRight, Bot, Terminal, Cpu
 } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
@@ -10,7 +10,8 @@ import clsx from 'clsx'
 const NAV_ITEMS = [
   { to: '/chat',   icon: MessageSquare, label: 'Чат с ИИ' },
   { to: '/upload', icon: Upload,        label: 'Документы' },
-  { to: '/status', icon: Activity,      label: 'Статус системы' },
+  { to: '/models', icon: Cpu,          label: 'Модели' },
+  { to: '/status', icon: Activity,     label: 'Статус системы' },
 ]
 
 const ADMIN_ITEMS = [

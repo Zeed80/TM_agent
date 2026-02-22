@@ -26,7 +26,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from neo4j import AsyncGraphDatabase
 
-from src.ai_engine import vlm_client
+from src.ai_engine import registry
 from src.ai_engine.prompts.blueprint_analysis import (
     BLUEPRINT_FULL_EXTRACTION_PROMPT,
     BLUEPRINT_QUICK_ANALYSIS_PROMPT,
@@ -262,15 +262,7 @@ async def _save_new_blueprint_to_graph(
 
     chunk_id = str(_uuid.uuid4())
 
-    async with httpx.AsyncClient(
-        timeout=httpx.Timeout(connect=10.0, read=settings.embedding_timeout, write=settings.embedding_timeout, pool=5.0)
-    ) as client:
-        emb_response = await client.post(
-            f"{settings.ollama_cpu_url}/api/embeddings",
-            json={"model": settings.embedding_model, "prompt": text_description},
-        )
-        emb_response.raise_for_status()
-        dense_vector = emb_response.json()["embedding"]
+    dense_vector = await registry.embed_single(text_description)
 
     ops = drawing_data.get("manufacturing_operations") or []
     tools = drawing_data.get("required_tools") or []
@@ -395,7 +387,7 @@ async def blueprint_vision(request: BlueprintVisionRequest) -> BlueprintVisionRe
     )
 
     try:
-        analysis_text = await vlm_client.analyze_blueprint(
+        analysis_text = await registry.analyze_blueprint(
             image_path=image_path,
             system_prompt=BLUEPRINT_SYSTEM_PROMPT,
             user_prompt=user_prompt,

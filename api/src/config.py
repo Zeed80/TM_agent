@@ -76,5 +76,19 @@ class Settings(BaseSettings):
     # ── Agentic Loop — лимит итераций вызова инструментов ──────────
     chat_max_tool_iterations: int = 5
 
+    # ── Облачные провайдеры (опционально) ───────────────────────────
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    google_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    minimax_api_key: str | None = None
+    # Таймауты для облачных вызовов (секунды)
+    cloud_llm_timeout: float = 120.0
+    cloud_embedding_timeout: float = 60.0
+
+    # ── vLLM (локальный, OpenAI-совместимый API) ─────────────────────
+    vllm_base_url: str | None = None  # например http://vllm:8000/v1
+
 
 settings = Settings()

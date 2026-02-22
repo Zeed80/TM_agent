@@ -29,6 +29,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from src.ai_engine.model_assignments import get_assignment
 from src.ai_engine.vram_manager import VRAMManager
 from src.auth import get_current_user
 from src.config import settings
@@ -372,9 +373,18 @@ async def _stream_agent_response(
                     if isinstance(r["tool_result"], dict) else str(r["tool_result"] or "")
                 ollama_messages.append({"role": "tool", "content": tool_result_str})
 
+        # ── Текущее назначение LLM (из реестра или env) ───────────────
+        llm_assignment = await get_assignment("llm")
+        ollama_url = (llm_assignment.get("config") or {}).get("url", "").strip() or settings.ollama_gpu_url
+        llm_model = (llm_assignment.get("model_id") or "").strip() or settings.llm_model
+        provider_type = (llm_assignment.get("provider_type") or "").strip().lower()
+
         # ── Agentic Loop ──────────────────────────────────────────────
         vram = VRAMManager()
-        await vram.ensure_llm()
+        if provider_type == "ollama_gpu":
+            await vram.ensure_llm_for_model(llm_model)
+        else:
+            await vram.ensure_llm()
 
         full_assistant_content = ""
         tool_messages_to_save: list[dict] = []
@@ -385,9 +395,9 @@ async def _stream_agent_response(
             # Вызов Ollama: НЕ стримим (ждём tool_calls)
             async with httpx.AsyncClient(timeout=_TOOL_TIMEOUT) as client:
                 resp = await client.post(
-                    f"{settings.ollama_gpu_url}/api/chat",
+                    f"{ollama_url}/api/chat",
                     json={
-                        "model": settings.llm_model,
+                        "model": llm_model,
                         "messages": ollama_messages,
                         "tools": _TOOLS,
                         "stream": False,
