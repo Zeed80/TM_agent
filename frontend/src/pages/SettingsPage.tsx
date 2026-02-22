@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, Loader2, AlertCircle, Cpu, Database, Bot, MessageSquare, Settings2 } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Cpu, Database, Bot, MessageSquare, Settings2, Key, Copy, ExternalLink } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { LocalModelsTab, AssignmentsBlock, CloudModelsTab } from './ModelsPage'
@@ -167,6 +167,9 @@ export default function SettingsPage() {
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<(typeof MAIN_TABS)[number]['id']>('models')
   const [modelSubTab, setModelSubTab] = useState<(typeof MODEL_SUB_TABS)[number]['id']>('local')
+  const [openclawToken, setOpenclawToken] = useState<{ token: string; canvas_path: string } | null>(null)
+  const [openclawTokenError, setOpenclawTokenError] = useState<string | null>(null)
+  const [openclawTokenLoading, setOpenclawTokenLoading] = useState(false)
 
   const { data: settings, isLoading } = useQuery<SettingsMap>({
     queryKey: ['settings'],
@@ -295,7 +298,78 @@ export default function SettingsPage() {
     }
 
     if (activeTab === 'openclaw') {
-      return <div className="space-y-6">{renderSection(sectionOpenClaw, form, handleChange)}</div>
+      const canvasUrl = typeof window !== 'undefined' ? `${window.location.origin}${openclawToken?.canvas_path ?? '/openclaw/__openclaw__/canvas/'}` : ''
+      return (
+        <div className="space-y-6">
+          <section className="card p-5">
+            <h3 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2 flex items-center gap-2">
+              <Key size={16} />
+              Вход в веб-интерфейс OpenClaw (Control UI)
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+              При открытии страницы OpenClaw отображается «Unauthorized» — нужен токен gateway. Нажмите «Показать токен», скопируйте его, откройте ссылку ниже, в настройках Control UI вставьте токен в поле Auth и подключитесь.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  setOpenclawTokenError(null)
+                  setOpenclawTokenLoading(true)
+                  try {
+                    const res = await api.get<{ token: string; canvas_path: string }>('/admin/openclaw-setup-token')
+                    setOpenclawToken(res)
+                  } catch (e: unknown) {
+                    setOpenclawToken(null)
+                    setOpenclawTokenError(e instanceof Error ? e.message : 'Не удалось загрузить токен')
+                  } finally {
+                    setOpenclawTokenLoading(false)
+                  }
+                }}
+                disabled={openclawTokenLoading}
+                className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {openclawTokenLoading ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />}
+                Показать токен
+              </button>
+              <a
+                href={canvasUrl || '/openclaw/__openclaw__/canvas/'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-200 text-sm font-medium flex items-center gap-2"
+              >
+                <ExternalLink size={14} />
+                Открыть OpenClaw
+              </a>
+            </div>
+            {openclawTokenError && (
+              <p className="text-sm text-red-400 mb-2">{openclawTokenError}</p>
+            )}
+            {openclawToken && (
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-500">Токен (вставьте в Control UI → настройки → Auth)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={openclawToken.token}
+                    className="flex-1 px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(openclawToken.token)}
+                    className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 flex items-center gap-1"
+                    title="Копировать"
+                  >
+                    <Copy size={14} />
+                    Копировать
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+          {renderSection(sectionOpenClaw, form, handleChange)}
+        </div>
+      )
     }
 
     if (activeTab === 'chat') {

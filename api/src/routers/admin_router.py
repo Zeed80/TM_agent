@@ -12,6 +12,7 @@ Endpoints:
   POST /api/v1/admin/containers/{name}/start         — запуск
   GET  /api/v1/admin/containers/{name}/logs          — SSE поток логов
   GET  /api/v1/admin/system                          — CPU / RAM / диск хоста
+  GET  /api/v1/admin/openclaw-setup-token            — токен для входа в OpenClaw Control UI (только admin)
   POST /api/v1/admin/ollama/pull                     — загрузка модели Ollama
   POST /api/v1/admin/compose/rebuild/{service}       — docker compose build + up (pull image)
 """
@@ -92,6 +93,11 @@ class SystemInfo(BaseModel):
 
 class OllamaPullRequest(BaseModel):
     model: str
+
+
+class OpenClawSetupTokenResponse(BaseModel):
+    token: str
+    canvas_path: str = "/openclaw/__openclaw__/canvas/"
 
 
 # ── Вспомогательные функции ───────────────────────────────────────────
@@ -413,6 +419,48 @@ async def system_info(
         )
 
     return await asyncio.to_thread(_get)
+
+
+# ── OpenClaw: токен для входа в Control UI ────────────────────────────
+
+OPENCLAW_SETUP_TOKEN_PATH = os.environ.get(
+    "OPENCLAW_SETUP_TOKEN_PATH",
+    "/run/openclaw-setup/gateway.token",
+)
+
+
+@router.get("/openclaw-setup-token", response_model=OpenClawSetupTokenResponse)
+async def get_openclaw_setup_token(
+    _admin: dict = Depends(get_current_admin),
+) -> OpenClawSetupTokenResponse:
+    """
+    Возвращает токен gateway OpenClaw для входа в Control UI (/openclaw/__openclaw__/canvas/).
+    Токен записывается контейнером openclaw в общий volume при старте.
+    В Control UI: настройки → поле «Auth» → вставить токен и подключиться.
+    """
+    try:
+        token = await asyncio.to_thread(
+            lambda: open(OPENCLAW_SETUP_TOKEN_PATH, "r", encoding="utf-8").read().strip()
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Токен OpenClaw пока не создан. Перезапустите контейнер openclaw "
+                "(docker compose restart openclaw), подождите ~30 сек и повторите."
+            ),
+        )
+    except OSError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Не удалось прочитать токен OpenClaw: {e}",
+        )
+    if not token:
+        raise HTTPException(
+            status_code=404,
+            detail="Токен OpenClaw пуст. Перезапустите контейнер openclaw.",
+        )
+    return OpenClawSetupTokenResponse(token=token, canvas_path="/openclaw/__openclaw__/canvas/")
 
 
 # ── Ollama: загрузка модели ───────────────────────────────────────────

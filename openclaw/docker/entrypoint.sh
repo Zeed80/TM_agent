@@ -61,6 +61,16 @@ else
     openclaw doctor --fix --non-interactive 2>/dev/null || true
 fi
 
+# Сохраняем токен gateway в общий volume, чтобы API мог отдать его админу (вход в Control UI)
+SETUP_DIR="/run/openclaw-setup"
+if [ -d "$SETUP_DIR" ]; then
+  _token=""
+  if _token=$(openclaw config get gateway.auth.token 2>/dev/null); then
+    printf '%s' "$_token" | tr -d '\n' > "$SETUP_DIR/gateway.token"
+    echo "[openclaw] Токен для Control UI записан в $SETUP_DIR (доступен в Настройки → OpenClaw)."
+  fi
+fi
+
 echo "[openclaw] Starting Gateway on port 18789..."
-echo "[openclaw] Для получения ссылки с токеном откройте в браузере: /openclaw/__openclaw__/canvas/ (на вашем домене)."
+echo "[openclaw] Для входа откройте /openclaw/__openclaw__/canvas/ и введите токен из Настройки → OpenClaw (кнопка «Показать токен»)."
 exec openclaw gateway --port 18789

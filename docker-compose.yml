@@ -193,6 +193,7 @@ services:
       - ./api/src:/app/src                  # Горячая перезагрузка без rebuild
       - ./documents:/app/documents          # Документы (RW — для загрузки через Web UI)
       - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket для admin panel
+      - openclaw_setup:/run/openclaw-setup:ro         # Токен OpenClaw gateway (только для админа)
     environment:
       - OLLAMA_GPU_URL=http://ollama-gpu:11434
       - OLLAMA_CPU_URL=http://ollama-cpu:11434
@@ -313,6 +314,7 @@ services:
       - ./openclaw/workspace:/root/.openclaw/workspace   # SOUL.md, AGENTS.md, skills/
       - ./openclaw:/opt/openclaw-config:ro              # конфиг: openclaw.json копируется в entrypoint (избегаем EISDIR при отсутствии файла на хосте)
       - openclaw_data:/root/.openclaw/credentials        # Токены мессенджеров
+      - openclaw_setup:/run/openclaw-setup              # Токен gateway для входа в Control UI (читает API)
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - LLM_MODEL=${LLM_MODEL:-qwen3:30b}
@@ -379,4 +381,5 @@ volumes:
   neo4j_logs:           # Логи Neo4j
   pg_data:              # Данные PostgreSQL
   openclaw_data:        # Учётные данные мессенджеров (токены)
+  openclaw_setup:       # Токен gateway для входа в OpenClaw Control UI (пишет openclaw, читает api)
   caddy_config:         # Конфиг Caddy (autosave и т.д.)
