@@ -23,17 +23,23 @@ if [ -f /opt/openclaw-config/openclaw.json ]; then
     cp /opt/openclaw-config/openclaw.json "$CONFIG_DEST"
 else
     echo "[openclaw] No openclaw.json on host, using default config (OpenClaw 2026 schema)"
+    # Модель из env (совпадает с API/PRD); Ollama в Docker — по имени сервиса
+    OC_MODEL="${LLM_MODEL:-qwen3:30b}"
+    echo "[openclaw] LLM model: ollama/${OC_MODEL}"
+    # Формируем JSON: gateway, agents (workspace + model), channels, models.providers.ollama
+    _gateway='{"mode":"local","port":18789,"bind":"lan"}'
+    _agents_workspace='"/root/.openclaw/workspace"'
+    _model_primary="ollama/${OC_MODEL}"
+    _ollama_provider="{\"baseUrl\":\"http://ollama-gpu:11434\",\"apiKey\":\"ollama-local\",\"api\":\"ollama\",\"models\":[{\"id\":\"${OC_MODEL}\",\"name\":\"LLM ${OC_MODEL}\",\"reasoning\":false,\"input\":[\"text\"],\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0},\"contextWindow\":32768,\"maxTokens\":32768}]}"
     if [ -n "${TELEGRAM_BOT_TOKEN}" ]; then
         echo "[openclaw] TELEGRAM_BOT_TOKEN set — enabling Telegram (token from env)"
-        cat > "$CONFIG_DEST" << 'ENDOFCONFIG'
-{"gateway":{"mode":"local","port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":true,"botToken":"${TELEGRAM_BOT_TOKEN}","dmPolicy":"pairing"}}}
-ENDOFCONFIG
+        _channels="{\"telegram\":{\"enabled\":true,\"botToken\":\"${TELEGRAM_BOT_TOKEN}\",\"dmPolicy\":\"pairing\"}}"
     else
-        echo "[openclaw] TELEGRAM_BOT_TOKEN not set — Telegram disabled (no 401 spam). Set in .env and restart to enable."
-        cat > "$CONFIG_DEST" << 'EOF'
-{"gateway":{"mode":"local","port":18789,"bind":"lan"},"agents":{"defaults":{"workspace":"/root/.openclaw/workspace"}},"channels":{"telegram":{"enabled":false}}}
-EOF
+        echo "[openclaw] TELEGRAM_BOT_TOKEN not set — Telegram disabled. Set in .env and restart to enable."
+        _channels='{"telegram":{"enabled":false}}'
     fi
+    # Собираем итоговый JSON (одна строка без переносов)
+    printf '%s\n' "{\"gateway\":${_gateway},\"agents\":{\"defaults\":{\"workspace\":${_agents_workspace},\"model\":{\"primary\":\"${_model_primary}\"}}},\"channels\":${_channels},\"models\":{\"providers\":{\"ollama\":${_ollama_provider}}}}" > "$CONFIG_DEST"
 fi
 
 echo "[openclaw] Starting Gateway on port 18789..."

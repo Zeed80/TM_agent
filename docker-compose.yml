@@ -309,6 +309,8 @@ services:
       - openclaw_data:/root/.openclaw/credentials        # Токены мессенджеров
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - LLM_MODEL=${LLM_MODEL:-qwen3:30b}
+      - OLLAMA_API_KEY=ollama-local
       - OPENCLAW_AUTO_UPDATE=${OPENCLAW_AUTO_UPDATE:-false}
     networks:
       - enterprise-net

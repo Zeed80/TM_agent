@@ -531,7 +531,7 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
     endpoint_map = {
         "enterprise_graph_search": "/skills/graph-search",
         "enterprise_docs_search":  "/skills/docs-search",
-        "inventory_sql_search":    "/skills/inventory-sql-search",
+        "inventory_sql_search":    "/skills/inventory-sql",
         "blueprint_vision":        "/skills/blueprint-vision",
     }
 
@@ -575,8 +575,8 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> tuple[str, str]:
                 count = data.get("records_count", 0)
                 summary = f"Найдено {count} записей в производственном графе"
             elif tool_name == "enterprise_docs_search":
-                count = len(data.get("documents", []))
-                summary = f"Найдено {count} документов"
+                count = data.get("chunks_found", len(data.get("sources", [])))
+                summary = f"Найдено {count} фрагментов документации"
             elif tool_name == "inventory_sql_search":
                 count = data.get("rows_count", 0)
                 summary = f"Получено {count} записей из склада"
