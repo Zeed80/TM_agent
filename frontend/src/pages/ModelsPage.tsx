@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { api, getToken } from '../api/client'
 import type { ProviderInfo, AssignmentsResponse, OllamaInstanceModels } from '../types'
+import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
 
 type TabId = 'local' | 'cloud'
@@ -179,17 +180,59 @@ function LocalModelsTab() {
   )
 }
 
-// ─── Облачные модели (пока заглушка + баннер безопасности) ──────────────
+// ─── Облачные модели: API-ключи в админке, баннер безопасности ───────────
 function CloudModelsTab() {
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.role === 'admin'
+
+  const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({})
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+
+  const queryClient = useQueryClient()
   const { data: providers } = useQuery<ProviderInfo[]>({
     queryKey: ['models', 'providers'],
     queryFn: () => api.get<ProviderInfo[]>('/models/providers'),
+  })
+
+  const patchProviderKey = useMutation({
+    mutationFn: async ({ providerId, apiKey }: { providerId: string; apiKey: string | null }) => {
+      await api.patch(`/models/providers/${providerId}`, { api_key: apiKey ?? null })
+    },
+    onSuccess: (_, { providerId }) => {
+      setKeyDrafts((prev) => {
+        const next = { ...prev }
+        delete next[providerId]
+        return next
+      })
+      setSaveError(null)
+      setSaveSuccess(providerId)
+      queryClient.invalidateQueries({ queryKey: ['models', 'providers'] })
+      setTimeout(() => setSaveSuccess(null), 3000)
+    },
+    onError: (err: Error) => {
+      setSaveError(err.message || 'Не удалось сохранить ключ')
+    },
   })
 
   const cloudProviders = useMemo(
     () => (providers || []).filter((p) => !['ollama_gpu', 'ollama_cpu'].includes(p.type)),
     [providers],
   )
+
+  const handleSaveKey = (providerId: string) => {
+    setSaveError(null)
+    const value = keyDrafts[providerId]?.trim()
+    patchProviderKey.mutate({
+      providerId,
+      apiKey: value === '' ? null : (value ?? null),
+    })
+  }
+
+  const handleClearKey = (providerId: string) => {
+    setSaveError(null)
+    patchProviderKey.mutate({ providerId, apiKey: null })
+  }
 
   return (
     <div className="space-y-6">
@@ -208,6 +251,12 @@ function CloudModelsTab() {
         </div>
       </div>
 
+      {saveError && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+          {saveError}
+        </div>
+      )}
+
       {cloudProviders.length === 0 ? (
         <p className="text-slate-500 text-sm">
           Облачные провайдеры пока не добавлены. Настройка API-ключей и списка моделей — в
@@ -217,7 +266,7 @@ function CloudModelsTab() {
         <div className="space-y-4">
           {cloudProviders.map((p) => (
             <div key={p.id} className="card p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="font-medium text-slate-200">{p.name}</span>
                 {p.api_key_set ? (
                   <span className="text-xs text-green-400 flex items-center gap-1">
@@ -239,6 +288,50 @@ function CloudModelsTab() {
                   ))}
                   {p.models.length > 10 && (
                     <span className="text-slate-500 text-xs">+{p.models.length - 10}</span>
+                  )}
+                </div>
+              )}
+
+              {isAdmin && (
+                <div className="mt-4 pt-4 border-t border-surface-700 space-y-2">
+                  <label className="block text-xs text-slate-400 font-medium">
+                    API-ключ (только для администратора)
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder={p.api_key_set ? '•••••••• — введите новый ключ для замены' : 'Введите API-ключ'}
+                      value={keyDrafts[p.id] ?? ''}
+                      onChange={(e) =>
+                        setKeyDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
+                      }
+                      className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveKey(p.id)}
+                      disabled={patchProviderKey.isPending}
+                      className="px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {patchProviderKey.isPending && patchProviderKey.variables?.providerId === p.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : null}
+                      Сохранить ключ
+                    </button>
+                    {p.api_key_set && (
+                      <button
+                        type="button"
+                        onClick={() => handleClearKey(p.id)}
+                        disabled={patchProviderKey.isPending}
+                        className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 text-sm disabled:opacity-50"
+                      >
+                        Удалить ключ
+                      </button>
+                    )}
+                  </div>
+                  {saveSuccess === p.id && (
+                    <p className="text-xs text-green-400">Ключ сохранён.</p>
                   )}
                 </div>
               )}

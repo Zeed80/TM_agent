@@ -2,7 +2,7 @@
 OpenAI-совместимые провайдеры: OpenAI, OpenRouter, Anthropic, vLLM.
 
 Реализация вызовов к API для LLM, VLM, Embedding, Reranker.
-Ключи берутся из settings (env).
+API-ключи берутся только из БД (задаются в админке), не из .env.
 """
 
 import base64
@@ -30,14 +30,12 @@ _EMBED_TIMEOUT = httpx.Timeout(
 )
 
 
-def _get_api_key(provider_type: str) -> str | None:
-    key_by_type = {
-        "openai": settings.openai_api_key,
-        "openrouter": settings.openrouter_api_key,
-        "anthropic": settings.anthropic_api_key,
-    }
-    key = key_by_type.get(provider_type)
-    return (key and str(key).strip()) or None
+async def _get_api_key(provider_id: str, provider_type: str) -> str | None:
+    """Ключ провайдера из БД (админка). vLLM не требует ключа."""
+    if provider_type == "vllm":
+        return None
+    from src.provider_keys import get_provider_api_key
+    return await get_provider_api_key(provider_id)
 
 
 def _get_base_url(provider_type: str, config: dict[str, Any]) -> str:
@@ -78,9 +76,13 @@ async def llm_generate(
     stop: list[str] | None = None,
 ) -> str:
     """Генерация текста через OpenAI-совместимый или Anthropic API."""
-    api_key = _get_api_key(provider_type)
+    provider_id = (assignment.get("provider_id") or "").strip()
+    api_key = await _get_api_key(provider_id, provider_type)
     if not api_key and provider_type != "vllm":
-        raise RuntimeError(f"API-ключ для провайдера {provider_type} не задан. Укажите в настройках или env.")
+        raise RuntimeError(
+            f"API-ключ для провайдера {provider_type} не задан. "
+            "Укажите ключ в разделе «Модели» → вкладка «Облачные» в админке."
+        )
 
     base_url = _get_base_url(provider_type, config)
     messages = _build_messages(prompt, system_prompt)
@@ -220,9 +222,10 @@ async def vlm_analyze_from_bytes(
     system_prompt: str,
     user_prompt: str,
 ) -> str:
-    api_key = _get_api_key(provider_type)
+    provider_id = (assignment.get("provider_id") or "").strip()
+    api_key = await _get_api_key(provider_id, provider_type)
     if not api_key and provider_type != "vllm":
-        raise RuntimeError(f"API-ключ для {provider_type} не задан.")
+        raise RuntimeError(f"API-ключ для {provider_type} не задан. Укажите в админке: Модели → Облачные.")
     base_url = _get_base_url(provider_type, config)
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
     mime = "image/png" if image_format.lower() in ("png", "png") else "image/jpeg"
@@ -258,9 +261,10 @@ async def embed_single(
     text: str,
 ) -> list[float]:
     """Embedding через OpenAI-совместимый API."""
-    api_key = _get_api_key(provider_type)
+    provider_id = (assignment.get("provider_id") or "").strip()
+    api_key = await _get_api_key(provider_id, provider_type)
     if not api_key and provider_type != "vllm":
-        raise RuntimeError(f"API-ключ для {provider_type} не задан.")
+        raise RuntimeError(f"API-ключ для {provider_type} не задан. Укажите в админке: Модели → Облачные.")
     base_url = _get_base_url(provider_type, config)
     async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
         resp = await client.post(
@@ -286,9 +290,10 @@ async def embed_texts(
 ) -> list[list[float]]:
     if not texts:
         return []
-    api_key = _get_api_key(provider_type)
+    provider_id = (assignment.get("provider_id") or "").strip()
+    api_key = await _get_api_key(provider_id, provider_type)
     if not api_key and provider_type != "vllm":
-        raise RuntimeError(f"API-ключ для {provider_type} не задан.")
+        raise RuntimeError(f"API-ключ для {provider_type} не задан. Укажите в админке: Модели → Облачные.")
     base_url = _get_base_url(provider_type, config)
     async with httpx.AsyncClient(timeout=_EMBED_TIMEOUT) as client:
         resp = await client.post(

@@ -55,6 +55,11 @@ class PutAssignmentBody(BaseModel):
     model_id: str
 
 
+class PatchProviderBody(BaseModel):
+    """Тело запроса для обновления провайдера (API-ключ задаётся только через админку)."""
+    api_key: str | None = None  # задать ключ; пустая строка или null — удалить ключ
+
+
 # ─── GET /providers ─────────────────────────────────────────────────────
 
 @router.get("/providers", response_model=list[ProviderInfo])
@@ -80,6 +85,7 @@ async def list_providers(
                 config = {}
         models: list[str] = []
         ptype = (r.get("type") or "").strip().lower()
+        # Ключ задаётся только в админке (БД), не в .env
         api_key_set = bool(r.get("api_key_set"))
         if ptype == "ollama_gpu":
             url = (config.get("url") or settings.ollama_gpu_url).strip()
@@ -91,7 +97,7 @@ async def list_providers(
             url = (settings.vllm_base_url or "").strip().rstrip("/")
             models = await _vllm_list_models(url) if url else []
         else:
-            api_key_set = _cloud_api_key_set(ptype)
+            # Облачные: ключ только из БД (админка), не из env
             models = _cloud_models_list(ptype, api_key_set)
         result.append(ProviderInfo(
             id=str(r["id"]),
@@ -102,17 +108,6 @@ async def list_providers(
             models=models,
         ))
     return result
-
-
-def _cloud_api_key_set(provider_type: str) -> bool:
-    """Проверяет, задан ли API-ключ в env для облачного провайдера."""
-    key_by_type = {
-        "openai": getattr(settings, "openai_api_key", None),
-        "anthropic": getattr(settings, "anthropic_api_key", None),
-        "openrouter": getattr(settings, "openrouter_api_key", None),
-    }
-    key = key_by_type.get(provider_type)
-    return bool(key and str(key).strip())
 
 
 def _cloud_models_list(provider_type: str, api_key_set: bool) -> list[str]:
@@ -192,6 +187,31 @@ async def get_assignments(
         embedding=item("embedding"),
         reranker=item("reranker"),
     )
+
+
+# ─── PATCH /providers/:id (API-ключ только через админку) ───────────────
+
+@router.patch("/providers/{provider_id}")
+async def patch_provider(
+    provider_id: str,
+    body: PatchProviderBody,
+    current_user: dict = Depends(get_current_admin),
+) -> dict[str, str]:
+    """
+    Обновить настройки провайдера. API-ключ задаётся только здесь (не в .env).
+    Передайте api_key для сохранения, null или пустую строку — чтобы удалить ключ.
+    """
+    from src.provider_keys import set_provider_api_key
+
+    rows = await postgres_client.execute_query(
+        "SELECT id FROM model_providers WHERE id = CAST(:pid AS uuid)",
+        {"pid": provider_id},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Провайдер не найден")
+
+    await set_provider_api_key(provider_id, body.api_key)
+    return {"status": "ok", "message": "Ключ сохранён" if (body.api_key and body.api_key.strip()) else "Ключ удалён"}
 
 
 # ─── PUT /assignments ───────────────────────────────────────────────────

@@ -78,7 +78,7 @@ async def generate(
     )
 
 
-async def generate_json(self, prompt: str, system_prompt: str | None = None) -> str:
+async def generate_json_llm(prompt: str, system_prompt: str | None = None) -> str:
     """Генерация JSON через текущую LLM."""
     assignment = await get_assignment("llm")
     ptype = (assignment.get("provider_type") or "").strip().lower()
@@ -105,34 +105,6 @@ async def generate_json(self, prompt: str, system_prompt: str | None = None) -> 
     return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
 
 
-# Убираем self из сигнатуры — generate_json не метод класса
-async def generate_json_llm(prompt: str, system_prompt: str | None = None) -> str:
-    assignment = await get_assignment("llm")
-    ptype = (assignment.get("provider_type") or "").strip().lower()
-    model_id = (assignment.get("model_id") or "").strip()
-    config = assignment.get("config") or {}
-
-    if ptype == "ollama_gpu":
-        url = _ollama_url(config)
-        prov = OllamaLLMProvider(url=url, model_id=model_id)
-        return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
-    if ptype in ("openai", "openrouter", "anthropic", "vllm"):
-        from src.ai_engine.providers import openai_compat
-        return await openai_compat.llm_generate_json(
-            provider_type=ptype,
-            model_id=model_id,
-            config=config,
-            assignment=assignment,
-            prompt=prompt,
-            system_prompt=system_prompt,
-        )
-
-    from src.config import settings
-    prov = OllamaLLMProvider(url=settings.ollama_gpu_url, model_id=model_id or settings.llm_model)
-    return await prov.generate_json(prompt=prompt, system_prompt=system_prompt)
-
-
-# Исправляю: в registry не должно быть self. generate_json была с self по ошибке.
 </think>
 Удаляю ошибочный параметр `self` и добавляю заглушку для облачных провайдеров, чтобы реестр работал пока только с Ollama.
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>

@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 24
 
+    # Шифрование API-ключей провайдеров в БД (задаются через админку, не .env).
+    # Если не задано — используется jwt_secret_key (минимум 32 байта для Fernet).
+    provider_keys_encryption_secret: str | None = None
+
     # ── Web UI / File Upload ────────────────────────────────────────
     # Директория для хранения загруженных документов
     documents_base_dir: str = "/app/documents"
