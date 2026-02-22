@@ -69,7 +69,7 @@ ROUTE_BLOCK="  handle /openclaw {
     @with_token query token *
     handle @with_token {
       reverse_proxy openclaw:18789 {
-        header_up Authorization "Bearer {query.token}"
+        header_up Authorization \"Bearer {query.token}\"
       }
     }
     handle {
