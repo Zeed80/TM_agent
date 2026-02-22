@@ -8,24 +8,40 @@
 # Env vars:
 #   SERVER_HOST   — домен или IP (обязательно)
 #   ACME_EMAIL    — email для Let's Encrypt (только для доменов)
+#   CADDY_TLS     — принудительно: "internal" = самоподписанный (для домена тоже),
+#                   не задан = авто (IP/localhost → internal, домен → Let's Encrypt)
 
 set -e
 
 SERVER_HOST="${SERVER_HOST:-localhost}"
 ACME_EMAIL="${ACME_EMAIL:-}"
+CADDY_TLS="${CADDY_TLS:-}"
 
 # Определяем, является ли SERVER_HOST IP-адресом или localhost
 is_ip_or_localhost() {
   echo "$1" | grep -qE '^(localhost|127\.|192\.|10\.|172\.|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})$'
 }
 
+# Проверяем наличие уже полученного сертификата в volume (переживает teardown)
+HAS_EXISTING_CERT=0
+if [ -d /data/caddy ] && [ -n "$(ls -A /data/caddy/certificates 2>/dev/null)" ]; then
+  HAS_EXISTING_CERT=1
+fi
+
 # Определяем TLS-директиву
-if is_ip_or_localhost "$SERVER_HOST"; then
+if [ "$CADDY_TLS" = "internal" ]; then
+  TLS_BLOCK="tls internal"
+  echo "[Caddy] Режим: self-signed TLS (принудительно CADDY_TLS=internal для ${SERVER_HOST})"
+elif is_ip_or_localhost "$SERVER_HOST"; then
   TLS_BLOCK="tls internal"
   echo "[Caddy] Режим: self-signed TLS (IP/localhost: ${SERVER_HOST})"
 else
   TLS_BLOCK=""
-  echo "[Caddy] Режим: Let's Encrypt для домена ${SERVER_HOST}"
+  if [ "$HAS_EXISTING_CERT" = 1 ]; then
+    echo "[Caddy] Режим: домен ${SERVER_HOST}; обнаружен существующий сертификат в /data/caddy — используем его"
+  else
+    echo "[Caddy] Режим: Let's Encrypt для домена ${SERVER_HOST}"
+  fi
 fi
 
 # Формируем глобальный блок

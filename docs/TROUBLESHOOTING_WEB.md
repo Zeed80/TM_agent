@@ -115,7 +115,41 @@ docker compose exec caddy wget -qO- --timeout=3 http://api:8000/health 2>/dev/nu
 
 ---
 
-## 8. Быстрый скрипт проверки
+## 8. Let's Encrypt: лимит сертификатов (HTTP 429)
+
+В логах Caddy может появиться:
+
+```text
+could not get certificate from issuer ... HTTP 429 ... too many certificates (5) already issued for this exact set of identifiers in the last 168h0m0s, retry after ...
+```
+
+Это значит: для вашего домена уже выдано 5 сертификатов за последние 7 дней (лимит Let's Encrypt). Новый сертификат можно будет получить **после** указанной даты (retry after).
+
+**Что сделать, чтобы сайт открывался сразу:**
+
+1. В `.env` добавьте (или измените):
+   ```env
+   CADDY_TLS=internal
+   ```
+2. Перезапустите Caddy:
+   ```bash
+   docker compose up -d caddy
+   ```
+3. Откройте `https://ваш-домен` — браузер покажет предупреждение о самоподписанном сертификате. Примите исключение (например «Дополнительно» → «Перейти на сайт»), после этого интерфейс будет открываться.
+
+**Когда истечёт лимит Let's Encrypt** (дата в сообщении «retry after»):
+
+1. Удалите из `.env` строку `CADDY_TLS=internal` (или закомментируйте).
+2. Перезапустите Caddy: `docker compose up -d caddy`.
+3. Caddy снова запросит сертификат у Let's Encrypt, предупреждение в браузере исчезнет.
+
+Переменная **CADDY_TLS** передаётся в контейнер Caddy из `docker-compose` и обрабатывается в `infra/caddy/entrypoint.sh`.
+
+**Сохранение сертификата при полной очистке:** сертификаты Caddy хранятся в каталоге на хосте, заданном в `.env` как **CADDY_DATA_PATH** (по умолчанию `/var/lib/caddy-certificates`). При `make teardown` или `install.sh --teardown` этот каталог не удаляется. После следующего `make up` Caddy обнаружит существующий сертификат в `/data/caddy` (bind mount с хоста) и будет использовать его (в логах: «обнаружен существующий сертификат в /data/caddy — используем его»), без повторного запроса к Let's Encrypt.
+
+---
+
+## 9. Быстрый скрипт проверки
 
 Сохраните как `scripts/check-web.sh` и запустите из корня проекта:
 

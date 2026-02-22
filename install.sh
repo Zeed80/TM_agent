@@ -115,12 +115,13 @@ if [[ "${1:-}" == "--teardown" ]]; then
     die "docker-compose.yml не найден. Запускайте из корня проекта."
   fi
   echo "Будет удалено: контейнеры, сети, volumes, образы tm_agent-*"
+  echo "Сертификаты Caddy хранятся на хосте в ${CADDY_DATA_PATH:-/var/lib/caddy-certificates} и не удаляются."
   if ! confirm "Выполнить полную очистку?"; then
     echo "Отменено."
     exit 0
   fi
   docker compose down -v --rmi local --remove-orphans
-  log_ok "Teardown завершён. Для установки заново запустите: sudo bash install.sh"
+  log_ok "Teardown завершён. Для установки заново: sudo bash install.sh"
   exit 0
 fi
 
@@ -317,6 +318,9 @@ QDRANT_COLLECTION=documents
 # Путь к данным моделей Ollama (по умолчанию /home/ollama-models)
 OLLAMA_MODELS_PATH=/home/ollama-models
 
+# Каталог на хосте для сертификатов Caddy (не удаляется при teardown)
+CADDY_DATA_PATH=/var/lib/caddy-certificates
+
 OPENCLAW_AUTO_UPDATE=false
 
 # ── Web Interface ────────────────────────────────
@@ -348,7 +352,11 @@ for dir in documents/*/; do
   touch "${dir}.gitkeep" 2>/dev/null || true
 done
 
-log_ok "Директории созданы: documents/{blueprints,manuals,gosts,emails,catalogs,tech_processes}"
+# Папка для сертификатов Caddy на хосте (не зависит от Docker volumes)
+CADDY_CERT_DIR="${CADDY_DATA_PATH:-/var/lib/caddy-certificates}"
+mkdir -p "$CADDY_CERT_DIR"
+chmod 755 "$CADDY_CERT_DIR"
+log_ok "Директории созданы: documents/..., ${CADDY_CERT_DIR} (сертификаты Caddy)"
 
 # ── Шаг 7: Сборка и запуск ────────────────────────────────────────────
 log_step "Сборка Docker-образов и запуск сервисов"

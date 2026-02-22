@@ -275,11 +275,13 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - caddy_data:/data          # Сертификаты Let's Encrypt (постоянные)
-      - caddy_config:/config      # Конфиг Caddy
+      # Сертификаты в стандартной папке на хосте — не теряются при удалении томов/образов
+      - ${CADDY_DATA_PATH:-/var/lib/caddy-certificates}:/data
+      - caddy_config:/config
     environment:
       - SERVER_HOST=${SERVER_HOST:-localhost}
       - ACME_EMAIL=${ACME_EMAIL:-}
+      - CADDY_TLS=${CADDY_TLS:-}
     networks:
       - enterprise-net
     depends_on:
@@ -377,5 +379,4 @@ volumes:
   neo4j_logs:           # Логи Neo4j
   pg_data:              # Данные PostgreSQL
   openclaw_data:        # Учётные данные мессенджеров (токены)
-  caddy_data:
-  caddy_config:            # Самоподписанный TLS-сертификат (генерируется 1 раз)
+  caddy_config:         # Конфиг Caddy (autosave и т.д.)
