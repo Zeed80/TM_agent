@@ -41,6 +41,7 @@ else
     echo "[Caddy] Режим: домен ${SERVER_HOST}; обнаружен существующий сертификат в /data/caddy — используем его"
   else
     echo "[Caddy] Режим: Let's Encrypt для домена ${SERVER_HOST}"
+    echo "[Caddy] При лимите LE (429) или если не заходите — в .env задайте CADDY_TLS=internal и перезапустите Caddy (самоподписанный сертификат)."
   fi
 fi
 
@@ -92,24 +93,24 @@ ${ROUTE_BLOCK}
 }
 CADDYEOF
 else
-  # Домен: первый блок — по домену (ACME или существующий сертификат), второй — вход по локальному IP (self-signed)
+  # Домен: блоки :443 и :80 первыми (чтобы при ошибке ACME для домена доступ по IP всё равно работал),
+  # затем сайт по домену (ACME или существующий сертификат).
   cat > /etc/caddy/Caddyfile << CADDYEOF
 ${GLOBAL_BLOCK}
 
-${SERVER_HOST} {
-  ${TLS_BLOCK}
-${ROUTE_BLOCK}
-}
-
-# Локальный вход по IP и localhost (self-signed) — запросы не по SERVER_HOST попадают сюда
+# Локальный вход по IP и localhost (self-signed) — обрабатывается первым, не зависит от ACME
 :443 {
   tls internal
 ${ROUTE_BLOCK}
 }
 
-# HTTP → HTTPS для запросов по IP (порт 80)
 :80 {
   redir https://{hostport} permanent
+}
+
+${SERVER_HOST} {
+  ${TLS_BLOCK}
+${ROUTE_BLOCK}
 }
 CADDYEOF
   echo "[Caddy] Включён локальный вход по IP: https://<IP-сервера> или https://127.0.0.1 (сертификат — самоподписанный)"

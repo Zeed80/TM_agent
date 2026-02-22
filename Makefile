@@ -101,7 +101,16 @@ check-web: ## Диагностика: почему не открывается �
 	  if [ -n "$$H" ]; then \
 	    code=$$(curl -k -s -o /dev/null -w "%{http_code}" "https://$$H/" 2>/dev/null || echo "err"); \
 	    echo "  https://$$H/ -> HTTP $$code"; \
+	    if [ "$$code" != "200" ] && [ "$$code" != "304" ]; then \
+	      echo "  Если 000/err — домен недоступен с этой машины. Попробуйте по IP: https://<IP-сервера>"; \
+	      echo "  При лимите Let's Encrypt (429): в .env добавьте CADDY_TLS=internal и make restart-caddy"; \
+	    fi; \
 	  else echo "  Задайте SERVER_HOST в .env"; fi
+	@echo ""
+	@echo "=== Ответ Caddy по 127.0.0.1 (локальный вход по IP) ==="
+	@code=$$(curl -k -s -o /dev/null -w "%{http_code}" "https://127.0.0.1/" 2>/dev/null || echo "err"); \
+	  echo "  https://127.0.0.1/ -> HTTP $$code"; \
+	  if [ "$$code" = "200" ] || [ "$$code" = "304" ]; then echo "  OK: заходите по https://127.0.0.1 или https://<IP-сервера> (примите самоподписанный сертификат)"; fi
 	@echo ""
 	@echo "=== Доступность frontend:3000 из контейнера caddy ==="
 	@docker compose exec -T caddy wget -qO- --timeout=3 http://frontend:3000/ 2>/dev/null | head -c 80 && echo " ... OK" || echo "  Таймаут или ошибка"
