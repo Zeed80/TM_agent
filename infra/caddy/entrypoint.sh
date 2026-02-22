@@ -67,9 +67,16 @@ ROUTE_BLOCK="  handle /openclaw {
   }
   handle_path /openclaw* {
     @with_token query token=*
+    @with_cookie expression \`{http.request.cookie.openclaw_token} != \"\"\`
     handle @with_token {
+      header +Set-Cookie \"openclaw_token={query.token}; Path=/openclaw; HttpOnly; SameSite=Lax; Max-Age=86400\"
       reverse_proxy openclaw:18789 {
         header_up Authorization \"Bearer {query.token}\"
+      }
+    }
+    handle @with_cookie {
+      reverse_proxy openclaw:18789 {
+        header_up Authorization \"Bearer {http.request.cookie.openclaw_token}\"
       }
     }
     handle {
