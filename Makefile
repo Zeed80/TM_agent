@@ -8,7 +8,7 @@ SHELL := /bin/bash
 .PHONY: help up down restart ps logs logs-all logs-caddy logs-api logs-gpu \
         update update-openclaw update-api update-frontend openclaw-pair \
         restart-caddy caddy-fallback-on-cert-error check-web \
-        init-db init-pg init-qdrant pull-models \
+        init-db init-pg init-qdrant migrate-uploaded-folder pull-models \
         ingest-excel ingest-pdf ingest-blueprints ingest-techprocess ingest-all \
         shell-api shell-neo4j shell-pg shell-qdrant \
         create-admin status \
@@ -157,12 +157,18 @@ init-pg: ## Применить миграции к существующей БД
 	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/04_provider_api_keys.sql
 	@echo "→ Таблица app_settings для настроек из Web UI..."
 	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/05_app_settings.sql
+	@echo "→ Миграция: папка invoices в uploaded_files..."
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/06_migration_uploaded_files_invoices.sql
 	@echo "✓ Схема PostgreSQL применена. Создай admin: make create-admin"
 
 init-qdrant: ## Создать коллекцию Qdrant с Sparse + Dense векторами
 	@echo "→ Инициализация коллекции Qdrant..."
 	@docker compose run --rm ingestion python -m src.setup_qdrant
 	@echo "✓ Коллекция Qdrant создана"
+
+migrate-uploaded-folder: ## Добавить папку invoices в допустимые значения uploaded_files.folder (при ошибке загрузки документов)
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/06_migration_uploaded_files_invoices.sql
+	@echo "✓ Миграция применена. Загрузка в папку «Счета» (invoices) должна работать."
 
 pull-models: ## Загрузить все Ollama-модели (требует интернета, ~40GB)
 	@echo "→ Загрузка LLM qwen3:30b на GPU (~18GB)..."

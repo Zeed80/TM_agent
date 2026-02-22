@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
     user_id     UUID         NOT NULL REFERENCES users(id) ON DELETE SET NULL,
     filename    VARCHAR(500) NOT NULL,
     folder      VARCHAR(100) NOT NULL
-                    CHECK (folder IN ('blueprints','manuals','gosts','emails','catalogs','tech_processes')),
+                    CHECK (folder IN ('blueprints','invoices','manuals','gosts','emails','catalogs','tech_processes')),
     file_size   BIGINT,
     mime_type   VARCHAR(255),
     status      VARCHAR(20)  NOT NULL DEFAULT 'uploaded'
