@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Cpu,
@@ -16,13 +17,11 @@ import type { ProviderInfo, AssignmentsResponse, OllamaInstanceModels } from '..
 import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
 
-type TabId = 'local' | 'cloud'
-
 const LOCAL_PROVIDER_TYPES = ['ollama_gpu', 'ollama_cpu', 'vllm'] as const
 const CLOUD_PROVIDER_TYPES = ['openai', 'anthropic', 'openrouter', 'google', 'minimax', 'z_ai'] as const
 
 // ─── Локальные модели: Ollama + vLLM ───────────────────────────────────
-function LocalModelsTab() {
+export function LocalModelsTab() {
   const [pullModel, setPullModel] = useState('')
   const [pullLogs, setPullLogs] = useState<string[]>([])
   const [pullRunning, setPullRunning] = useState(false)
@@ -219,7 +218,7 @@ function LocalModelsTab() {
 }
 
 // ─── Облачные модели: API-ключи в админке, баннер безопасности ───────────
-function CloudModelsTab() {
+export function CloudModelsTab() {
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.role === 'admin'
 
@@ -382,7 +381,7 @@ function CloudModelsTab() {
 }
 
 // ─── Назначение по ролям ───────────────────────────────────────────────
-function AssignmentsBlock() {
+export function AssignmentsBlock() {
   const queryClient = useQueryClient()
   const [savingRole, setSavingRole] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
@@ -531,53 +530,7 @@ function AssignmentsBlock() {
   )
 }
 
-// ─── Страница ──────────────────────────────────────────────────────────
+// ─── Редирект: все настройки моделей перенесены в «Настройки» ───────────
 export default function ModelsPage() {
-  const [tab, setTab] = useState<TabId>('local')
-
-  return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-xl font-bold text-slate-100">Настройка моделей</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Локальные (Ollama, vLLM) и облачные провайдеры. Назначьте модели для каждой роли.
-          </p>
-        </div>
-
-        {/* Табы */}
-        <div className="flex gap-2 border-b border-surface-700 pb-2">
-          <button
-            onClick={() => setTab('local')}
-            className={clsx(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              tab === 'local'
-                ? 'bg-accent/15 text-accent-light'
-                : 'text-slate-400 hover:bg-surface-800 hover:text-slate-200',
-            )}
-          >
-            <Cpu size={16} />
-            Локальные
-          </button>
-          <button
-            onClick={() => setTab('cloud')}
-            className={clsx(
-              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              tab === 'cloud'
-                ? 'bg-accent/15 text-accent-light'
-                : 'text-slate-400 hover:bg-surface-800 hover:text-slate-200',
-            )}
-          >
-            <Cloud size={16} />
-            Облачные
-          </button>
-        </div>
-
-        {tab === 'local' && <LocalModelsTab />}
-        {tab === 'cloud' && <CloudModelsTab />}
-
-        <AssignmentsBlock />
-      </div>
-    </div>
-  )
+  return <Navigate to="/settings" replace />
 }

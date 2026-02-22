@@ -4,6 +4,7 @@
 Endpoint: POST /api/v1/files/upload/{folder}
 Поддерживаемые папки:
   blueprints     — чертежи (PNG, JPEG, PDF)
+  invoices       — счета (PNG, JPEG, PDF и др. графические)
   manuals        — инструкции по эксплуатации (PDF, DOCX)
   gosts          — ГОСТы и стандарты (PDF)
   emails         — деловая переписка (EML, MSG, TXT)
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Разрешённые типы папок и расширений
 _FOLDER_EXTENSIONS: dict[str, set[str]] = {
     "blueprints":     {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".tiff", ".tif"},
+    "invoices":       {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".tiff", ".tif"},
     "manuals":        {".pdf", ".docx", ".doc", ".txt"},
     "gosts":          {".pdf", ".docx", ".doc"},
     "emails":         {".eml", ".msg", ".txt"},

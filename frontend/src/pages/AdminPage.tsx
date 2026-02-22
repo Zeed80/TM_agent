@@ -520,11 +520,11 @@ export default function AdminPage() {
           <div className="card p-5 space-y-5">
             <h2 className="text-sm font-semibold text-slate-200">Быстрые действия</h2>
 
-            {/* Загрузка моделей Ollama — на странице «Модели» */}
+            {/* Загрузка и выбор моделей — в Настройках */}
             <div className="text-sm text-slate-400">
-              Загрузка и выбор моделей Ollama: страница{' '}
-              <Link to="/models" className="text-accent-light hover:underline font-medium">Модели</Link>
-              {' '}→ вкладка «Локальные».
+              Загрузка и выбор моделей Ollama:{' '}
+              <Link to="/settings" className="text-accent-light hover:underline font-medium">Настройки</Link>
+              {' '}→ блоки «Загрузка моделей Ollama» и «Назначение по ролям».
             </div>
 
             {/* ETL */}

@@ -346,7 +346,7 @@ set -a; source .env; set +a
 # ── Шаг 6: Директории ─────────────────────────────────────────────────
 log_step "Создание структуры директорий"
 
-mkdir -p documents/{blueprints,manuals,gosts,emails,catalogs,tech_processes}
+mkdir -p documents/{blueprints,invoices,manuals,gosts,emails,catalogs,tech_processes}
 # Placeholder файлы чтобы папки не были пустыми
 for dir in documents/*/; do
   touch "${dir}.gitkeep" 2>/dev/null || true

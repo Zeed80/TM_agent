@@ -28,6 +28,7 @@ Blueprint Ingestion — Чертежи → VLM → Neo4j + Qdrant.
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import re
@@ -46,6 +47,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 BLUEPRINTS_DIR = Path(settings.documents_dir) / "blueprints"
+INVOICES_DIR = Path(settings.documents_dir) / "invoices"
 _bm25_model = SparseTextEmbedding("Qdrant/bm25")
 
 # ── VLM промпты ───────────────────────────────────────────────────────
@@ -124,6 +126,13 @@ _VLM_EXTRACTION_PROMPT = """Проанализируй машиностроит�
   "text_description": "Подробное описание (5-8 предложений) для семантического поиска. Включи: что за деталь, для чего, из чего сделана, основные операции изготовления, специфику обработки."
 }"""
 
+_VLM_INVOICE_SYSTEM = """Ты — помощник по учёту. Анализируй счета и платёжные документы.
+Отвечай на русском. Извлекай ключевые данные для поиска."""
+
+_VLM_INVOICE_PROMPT = """Опиши этот документ (счёт, накладная, акт) для поиска в базе.
+Укажи: тип документа, номер и дату (если видны), контрагента/поставщика, суммы, перечень товаров/услуг (кратко).
+Ответ дай одним связным текстом 3–8 предложений, без markdown."""
+
 
 def _encode_image(filepath: Path) -> str:
     with open(filepath, "rb") as f:
@@ -169,6 +178,70 @@ async def analyze_blueprint_via_vlm(image_b64: str) -> dict:
                 pass
         logger.warning(f"VLM вернул невалидный JSON: {raw[:300]}")
         return {"part_name": "Неизвестно", "text_description": raw, "material_grade": ""}
+
+
+async def analyze_invoice_via_vlm(image_b64: str) -> str:
+    """Отправляет изображение счёта в VLM и получает текстовое описание для поиска."""
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=10.0, read=settings.vlm_timeout, write=settings.vlm_timeout, pool=5.0)
+    ) as client:
+        response = await client.post(
+            f"{settings.ollama_gpu_url}/api/chat",
+            json={
+                "model": settings.vlm_model,
+                "messages": [
+                    {"role": "system", "content": _VLM_INVOICE_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": _VLM_INVOICE_PROMPT,
+                        "images": [image_b64],
+                    },
+                ],
+                "stream": False,
+            },
+        )
+        response.raise_for_status()
+        return (response.json().get("message", {}).get("content") or "").strip() or "Счёт (описание недоступно)"
+
+
+async def save_invoice_to_qdrant(
+    qdrant: AsyncQdrantClient,
+    description: str,
+    file_path: str,
+) -> None:
+    """Сохраняет описание счёта в Qdrant (только векторный поиск, без Neo4j)."""
+    file_name = Path(file_path).name
+    point_id = hashlib.sha256(file_path.encode()).hexdigest()[:16]
+
+    async with httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=10.0, read=settings.embedding_timeout, write=settings.embedding_timeout, pool=5.0)
+    ) as client:
+        emb_response = await client.post(
+            f"{settings.ollama_cpu_url}/api/embeddings",
+            json={"model": settings.embedding_model, "prompt": description},
+        )
+        emb_response.raise_for_status()
+        dense_vector = emb_response.json()["embedding"]
+
+    sparse_emb = list(_bm25_model.embed([description]))[0]
+    sparse_vector = {"indices": list(sparse_emb.indices), "values": list(sparse_emb.values)}
+
+    await qdrant.upsert(
+        collection_name=settings.qdrant_collection,
+        points=[{
+            "id": point_id,
+            "vectors": {
+                settings.qdrant_dense_vector_name: dense_vector,
+                settings.qdrant_sparse_vector_name: sparse_vector,
+            },
+            "payload": {
+                "text": description,
+                "source_file": file_name,
+                "source_type": "invoice",
+                "file_path": file_path,
+            },
+        }],
+    )
 
 
 async def save_to_neo4j(
@@ -503,21 +576,15 @@ async def is_already_indexed(driver, file_path: str) -> bool:
 
 
 async def main(force_reindex: bool = False) -> None:
-    logger.info("=== Blueprint Ingestion: Чертежи → VLM → Neo4j + Qdrant ===")
+    logger.info("=== Blueprint Ingestion: Чертежи + Счета → VLM → Neo4j + Qdrant ===")
     logger.info("Принцип: VLM вызывается ОДИН РАЗ при загрузке, затем поиск по графу.")
 
-    if not BLUEPRINTS_DIR.exists():
-        logger.error(f"Директория не найдена: {BLUEPRINTS_DIR}")
-        return
-
     supported = {".png", ".jpg", ".jpeg", ".webp"}
-    files = [f for f in BLUEPRINTS_DIR.rglob("*") if f.suffix.lower() in supported]
-
-    if not files:
-        logger.warning(f"Чертежи не найдены в {BLUEPRINTS_DIR}")
-        return
-
-    logger.info(f"Найдено чертежей: {len(files)}")
+    files = []
+    if BLUEPRINTS_DIR.exists():
+        files = [f for f in BLUEPRINTS_DIR.rglob("*") if f.suffix.lower() in supported]
+    if files:
+        logger.info(f"Найдено чертежей: {len(files)}")
 
     neo4j_driver = AsyncGraphDatabase.driver(
         settings.neo4j_uri,
@@ -576,6 +643,24 @@ async def main(force_reindex: bool = False) -> None:
             except Exception as exc:
                 errors += 1
                 logger.error(f"    ✗ Ошибка {filepath.name}: {exc}")
+
+        # ── Счета (invoices): только изображения → VLM → Qdrant (без Neo4j) ──
+        invoice_supported = {".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif"}
+        invoice_files = []
+        if INVOICES_DIR.exists():
+            invoice_files = [f for f in INVOICES_DIR.rglob("*") if f.suffix.lower() in invoice_supported]
+
+        for filepath in tqdm(invoice_files, desc="Обработка счетов"):
+            file_path_str = str(filepath)
+            try:
+                image_b64 = _encode_image(filepath)
+                description = await analyze_invoice_via_vlm(image_b64)
+                await save_invoice_to_qdrant(qdrant, description, file_path_str)
+                success += 1
+                logger.info(f"  ✓ Счёт: {filepath.name}")
+            except Exception as exc:
+                errors += 1
+                logger.error(f"  ✗ Ошибка счёта {filepath.name}: {exc}")
 
     finally:
         await neo4j_driver.close()

@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 MANUALS_DIR = Path(settings.documents_dir) / "manuals"
 GOSTS_DIR = Path(settings.documents_dir) / "gosts"
 EMAILS_DIR = Path(settings.documents_dir) / "emails"
+INVOICES_DIR = Path(settings.documents_dir) / "invoices"
 
 # BM25 модель (Правило 3)
 _bm25_model = SparseTextEmbedding("Qdrant/bm25")
@@ -340,6 +341,9 @@ async def main() -> None:
 
         logger.info("→ Деловая переписка (emails/)...")
         total += await process_directory(qdrant, EMAILS_DIR, "email")
+
+        logger.info("→ Счета (invoices/, только PDF)...")
+        total += await process_directory(qdrant, INVOICES_DIR, "invoice")
 
         logger.info(f"=== Загрузка завершена. Итого чанков в Qdrant: {total} ===")
     finally:

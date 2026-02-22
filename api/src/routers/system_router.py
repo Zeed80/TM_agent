@@ -154,7 +154,7 @@ async def system_status(
     # ── Использование диска ──────────────────────────────────────────
     disk_usage: list[DiskUsage] = []
     base_dir = Path(get_setting("documents_base_dir"))
-    for folder_name in ["blueprints", "manuals", "gosts", "emails", "catalogs", "tech_processes"]:
+    for folder_name in ["blueprints", "invoices", "manuals", "gosts", "emails", "catalogs", "tech_processes"]:
         folder_path = base_dir / folder_name
         if folder_path.exists():
             files = list(folder_path.iterdir())

@@ -3,17 +3,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, Loader2, AlertCircle } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuthStore } from '../store/auth'
+import { LocalModelsTab, AssignmentsBlock, CloudModelsTab } from './ModelsPage'
 
 type SettingsMap = Record<string, string | number | boolean | null>
 
 const SECTIONS: { title: string; keys: { key: keyof SettingsMap; label: string; type: 'text' | 'number' | 'boolean'; placeholder?: string }[] }[] = [
   {
-    title: 'Модели (Ollama)',
+    title: 'Модели (Ollama) — имена по умолчанию',
     keys: [
-      { key: 'llm_model', label: 'LLM модель', type: 'text', placeholder: 'qwen3:30b' },
-      { key: 'vlm_model', label: 'VLM модель', type: 'text', placeholder: 'qwen3-vl:14b' },
-      { key: 'embedding_model', label: 'Embedding модель', type: 'text', placeholder: 'qwen3-embedding' },
-      { key: 'reranker_model', label: 'Reranker модель', type: 'text', placeholder: 'qwen3-reranker' },
+      { key: 'llm_model', label: 'LLM модель (по умолчанию)', type: 'text', placeholder: 'qwen3:30b' },
+      { key: 'vlm_model', label: 'VLM модель (по умолчанию)', type: 'text', placeholder: 'qwen3-vl:14b' },
+      { key: 'embedding_model', label: 'Embedding модель (по умолчанию)', type: 'text', placeholder: 'qwen3-embedding' },
+      { key: 'reranker_model', label: 'Reranker модель (по умолчанию)', type: 'text', placeholder: 'qwen3-reranker' },
     ],
   },
   {
@@ -142,7 +143,7 @@ export default function SettingsPage() {
     <div className="p-6 max-w-4xl">
       <h1 className="text-xl font-semibold text-slate-100 mb-2">Настройки системы</h1>
       <p className="text-sm text-slate-500 mb-6">
-        Значения из этой страницы имеют приоритет над .env. Пароли БД и JWT задаются только в .env.
+        Все настройки в одном месте: имена моделей по умолчанию, загрузка моделей Ollama, назначение по ролям и API-ключи облачных провайдеров. Значения имеют приоритет над .env. Пароли БД и JWT задаются только в .env.
       </p>
 
       {message && (
@@ -205,6 +206,34 @@ export default function SettingsPage() {
             </div>
           </section>
         ))}
+
+        {/* Загрузка моделей Ollama и назначение по ролям — единый блок настроек моделей */}
+        <section className="card p-5">
+          <h2 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
+            Загрузка моделей Ollama
+          </h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Загрузите модель по имени (например qwen3:30b), затем выберите её в «Назначение по ролям» ниже.
+          </p>
+          <LocalModelsTab />
+        </section>
+
+        <section className="card p-5">
+          <h2 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
+            Назначение по ролям
+          </h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Выберите, какая модель используется для чата, анализа чертежей, поиска и переранжирования. Имеет приоритет над полями «по умолчанию» выше.
+          </p>
+          <AssignmentsBlock />
+        </section>
+
+        <section className="card p-5">
+          <h2 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
+            Облачные провайдеры (API-ключи)
+          </h2>
+          <CloudModelsTab />
+        </section>
 
         <div className="flex justify-end">
           <button

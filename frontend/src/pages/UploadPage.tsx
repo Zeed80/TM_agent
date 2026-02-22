@@ -1,6 +1,8 @@
 import { useState, useRef, DragEvent, ChangeEvent } from 'react'
-import { Upload, FolderOpen, CheckCircle, AlertCircle, X, FileText, Image, Table } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Upload, FolderOpen, CheckCircle, AlertCircle, X, FileText, Image, Table, Play } from 'lucide-react'
 import { uploadFile, ApiError } from '../api/client'
+import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
 
 const FOLDERS = [
@@ -12,6 +14,15 @@ const FOLDERS = [
     accept: '.png,.jpg,.jpeg,.webp,.pdf,.tiff,.tif',
     color: 'text-blue-400',
     bg: 'bg-blue-400/10 border-blue-400/20',
+  },
+  {
+    id: 'invoices',
+    label: 'Счета',
+    description: 'PNG, JPEG, PDF, TIFF — счета, накладные, акты',
+    icon: FileText,
+    accept: '.png,.jpg,.jpeg,.webp,.pdf,.tiff,.tif',
+    color: 'text-teal-400',
+    bg: 'bg-teal-400/10 border-teal-400/20',
   },
   {
     id: 'manuals',
@@ -70,6 +81,83 @@ interface UploadItem {
   progress: number
   message: string
   error: string
+}
+
+/** Кнопка «Запустить индексацию»: только для admin, запускает ingest-all без ожидания конца. */
+function StartIndexingButton() {
+  const { user } = useAuthStore()
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const handleStart = async () => {
+    if (user?.role !== 'admin' || loading) return
+    setLoading(true)
+    setMessage(null)
+    const token = localStorage.getItem('access_token')
+    try {
+      const res = await fetch('/api/v1/admin/ingest/all', {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      if (!res.ok) {
+        const t = await res.text()
+        throw new Error(t || res.statusText)
+      }
+      setMessage('Индексация запущена')
+      setLoading(false)
+      if (res.body) {
+        const reader = res.body.getReader()
+        void (async () => {
+          try {
+            while (true) {
+              const { done } = await reader.read()
+              if (done) break
+            }
+          } catch {
+            // игнорируем ошибки фона
+          }
+        })()
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Ошибка')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (user?.role !== 'admin') {
+    return (
+      <Link to="/admin" className="btn-primary text-sm inline-flex items-center gap-2">
+        <Play size={14} />
+        Индексация в Управлении
+      </Link>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleStart}
+        disabled={loading}
+        className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-50"
+      >
+        {loading ? (
+          <span className="animate-pulse">Запуск…</span>
+        ) : (
+          <>
+            <Play size={14} />
+            Запустить индексацию
+          </>
+        )}
+      </button>
+      {message && (
+        <span className={message === 'Запущено' ? 'text-green-400 text-xs' : 'text-red-400 text-xs'}>
+          {message}
+        </span>
+      )}
+    </div>
+  )
 }
 
 export default function UploadPage() {
@@ -156,8 +244,7 @@ export default function UploadPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-100">Загрузка документов</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Загружайте документы для последующей индексации и поиска.
-            После загрузки запустите индексацию: <code className="text-accent-light">make ingest-all</code>
+            Загружайте документы для индексации и поиска. После загрузки запустите индексацию кнопкой ниже или в разделе Управление.
           </p>
         </div>
 
@@ -296,18 +383,25 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Подсказка по индексации */}
-        <div className="card p-4 flex items-start gap-3">
-          <FolderOpen size={18} className="text-amber-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-slate-200">Следующий шаг: индексация</p>
-            <p className="text-xs text-slate-500 mt-1">
-              После загрузки файлы нужно проиндексировать, чтобы ИИ мог по ним искать.
-              Запустите на сервере:
-            </p>
-            <code className="block mt-2 text-xs font-mono text-accent-light bg-surface-900 rounded px-3 py-2">
-              make ingest-all
-            </code>
+        {/* Индексация: кнопка и ссылка на Управление */}
+        <div className="card p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <FolderOpen size={18} className="text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-slate-200">Следующий шаг: индексация</p>
+              <p className="text-xs text-slate-500 mt-1">
+                После загрузки запустите индексацию — тогда ИИ сможет искать по документам. Всё делается кнопками, без консоли.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <StartIndexingButton />
+            <Link
+              to="/admin"
+              className="text-xs text-slate-400 hover:text-accent-light transition-colors"
+            >
+              Управление →
+            </Link>
           </div>
         </div>
       </div>
