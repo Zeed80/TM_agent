@@ -257,7 +257,7 @@ export default function ChatPage() {
                 </h2>
               </div>
               <a
-                href={`${window.location.origin}/openclaw`}
+                href={`${window.location.origin}/openclaw/__openclaw__/canvas/`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
@@ -392,7 +392,7 @@ export default function ChatPage() {
                 Новый чат
               </button>
               <a
-                href={`${window.location.origin}/openclaw`}
+                href={`${window.location.origin}/openclaw/__openclaw__/canvas/`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium

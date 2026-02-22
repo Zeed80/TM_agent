@@ -57,8 +57,14 @@ else
 }"
 fi
 
-# Общий контент блока: /openclaw → веб-интерфейс OpenClaw, остальное — API и frontend
-ROUTE_BLOCK="  handle_path /openclaw* {
+# Общий контент блока: /openclaw → веб-интерфейс OpenClaw (canvas с первоначальной настройкой и ссылкой с токеном)
+ROUTE_BLOCK="  handle path /openclaw {
+    redir /openclaw/__openclaw__/canvas/ permanent
+  }
+  handle path /openclaw/ {
+    redir /openclaw/__openclaw__/canvas/ permanent
+  }
+  handle_path /openclaw* {
     reverse_proxy openclaw:18789
   }
   handle {

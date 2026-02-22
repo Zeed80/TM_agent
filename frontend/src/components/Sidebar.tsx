@@ -13,6 +13,9 @@ const NAV_ITEMS = [
   { to: '/status', icon: Activity,     label: 'Статус системы' },
 ]
 
+/** OpenClaw — веб-интерфейс агента (первоначальная настройка и ссылка с токеном на вход) */
+const OPENCLAW_CANVAS_PATH = '/openclaw/__openclaw__/canvas/'
+
 const ADMIN_ITEMS = [
   { to: '/admin',   icon: Terminal, label: 'Управление' },
   { to: '/settings', icon: Settings, label: 'Настройки' },
@@ -68,6 +71,15 @@ export default function Sidebar() {
             {!collapsed && <span className="truncate">{label}</span>}
           </NavLink>
         ))}
+
+        <a
+          href={OPENCLAW_CANVAS_PATH}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 text-slate-400 hover:bg-surface-800 hover:text-slate-200"
+          title="OpenClaw: первоначальная настройка, ссылка с токеном на вход"
+        >
+          <Bot size={18} className="shrink-0" />
+          {!collapsed && <span className="truncate">OpenClaw</span>}
+        </a>
 
         {/* Разделитель для admin */}
         {user?.role === 'admin' && (
