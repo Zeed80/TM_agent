@@ -18,6 +18,7 @@ _SCHEMA: dict[str, tuple[str, Any]] = {
     # Ollama
     "ollama_gpu_url": ("str", None),
     "ollama_cpu_url": ("str", None),
+    "ollama_models_path": ("str", None),
     # Модели (Ollama / default)
     "llm_model": ("str", None),
     "vlm_model": ("str", None),
@@ -60,6 +61,7 @@ _cache: dict[str, Any] | None = None
 _SETTINGS_ATTR: dict[str, str] = {
     "ollama_gpu_url": "ollama_gpu_url",
     "ollama_cpu_url": "ollama_cpu_url",
+    "ollama_models_path": "ollama_models_path",
     "llm_model": "llm_model",
     "vlm_model": "vlm_model",
     "embedding_model": "embedding_model",

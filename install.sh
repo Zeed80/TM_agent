@@ -314,6 +314,9 @@ RERANKER_MODEL=qwen3-reranker
 EMBEDDING_DIM=4096
 QDRANT_COLLECTION=documents
 
+# Путь к данным моделей Ollama (по умолчанию /home/ollama-models)
+OLLAMA_MODELS_PATH=/home/ollama-models
+
 OPENCLAW_AUTO_UPDATE=false
 
 # ── Web Interface ────────────────────────────────

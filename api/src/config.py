@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # ── Ollama ──────────────────────────────────────────────────────
     ollama_gpu_url: str = "http://ollama-gpu:11434"
     ollama_cpu_url: str = "http://ollama-cpu:11434"
+    # Путь к данным моделей Ollama на хосте (для docker bind mount).
+    # По умолчанию /home/ollama-models — после удаления проекта модели сохраняются.
+    ollama_models_path: str = "/home/ollama-models"
 
     # ── Модели ──────────────────────────────────────────────────────
     llm_model: str = "qwen3:30b"

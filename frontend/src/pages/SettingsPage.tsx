@@ -17,10 +17,11 @@ const SECTIONS: { title: string; keys: { key: keyof SettingsMap; label: string; 
     ],
   },
   {
-    title: 'Ollama URL',
+    title: 'Ollama URL и путь к данным моделей',
     keys: [
       { key: 'ollama_gpu_url', label: 'Ollama GPU URL', type: 'text', placeholder: 'http://ollama-gpu:11434' },
       { key: 'ollama_cpu_url', label: 'Ollama CPU URL', type: 'text', placeholder: 'http://ollama-cpu:11434' },
+      { key: 'ollama_models_path', label: 'Путь к данным моделей Ollama (на хосте)', type: 'text', placeholder: '/home/ollama-models' },
     ],
   },
   {

@@ -36,12 +36,14 @@ VALUES
     ('a0000001-0000-4000-8000-000000000002', 'ollama_cpu', 'Ollama CPU', '{"url": "http://ollama-cpu:11434"}', FALSE, NOW())
 ON CONFLICT (type) DO NOTHING;
 
--- Сидер: облачные провайдеры (ключи задаются через env: OPENAI_API_KEY и т.д.)
+-- Сидер: облачные провайдеры (ключи задаются в админке: Модели → Облачные)
 INSERT INTO model_providers (id, type, name, config, api_key_set, created_at)
 VALUES
     ('a0000001-0000-4000-8000-000000000011', 'openai', 'OpenAI', '{"base_url": "https://api.openai.com/v1"}', FALSE, NOW()),
     ('a0000001-0000-4000-8000-000000000012', 'anthropic', 'Anthropic (Claude)', '{}', FALSE, NOW()),
     ('a0000001-0000-4000-8000-000000000013', 'openrouter', 'OpenRouter', '{"base_url": "https://openrouter.ai/api/v1"}', FALSE, NOW()),
+    ('a0000001-0000-4000-8000-000000000014', 'minimax', 'Minimax', '{"base_url": "https://api.minimax.chat/v1"}', FALSE, NOW()),
+    ('a0000001-0000-4000-8000-000000000015', 'z_ai', 'Z.ai', '{}', FALSE, NOW()),
     ('a0000001-0000-4000-8000-000000000021', 'vllm', 'vLLM (локальный)', '{}', FALSE, NOW())
 ON CONFLICT (type) DO NOTHING;
 

@@ -18,7 +18,10 @@ import clsx from 'clsx'
 
 type TabId = 'local' | 'cloud'
 
-// ─── Локальные модели: список + Pull ───────────────────────────────────
+const LOCAL_PROVIDER_TYPES = ['ollama_gpu', 'ollama_cpu', 'vllm'] as const
+const CLOUD_PROVIDER_TYPES = ['openai', 'anthropic', 'openrouter', 'google', 'minimax', 'z_ai'] as const
+
+// ─── Локальные модели: Ollama + vLLM ───────────────────────────────────
 function LocalModelsTab() {
   const [pullModel, setPullModel] = useState('')
   const [pullLogs, setPullLogs] = useState<string[]>([])
@@ -29,6 +32,16 @@ function LocalModelsTab() {
     queryKey: ['models', 'local', 'ollama'],
     queryFn: () => api.get<Record<string, OllamaInstanceModels>>('/models/local/ollama'),
   })
+
+  const { data: providers } = useQuery<ProviderInfo[]>({
+    queryKey: ['models', 'providers'],
+    queryFn: () => api.get<ProviderInfo[]>('/models/providers'),
+  })
+
+  const vllmProviders = useMemo(
+    () => (providers || []).filter((p) => p.type === 'vllm'),
+    [providers],
+  )
 
   const handlePull = async () => {
     if (!pullModel.trim() || pullRunning) return
@@ -140,6 +153,31 @@ function LocalModelsTab() {
             </div>
           </section>
 
+          {vllmProviders.length > 0 && (
+            <section>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                vLLM (локальный)
+              </h3>
+              <div className="card p-4">
+                <div className="flex flex-wrap gap-2">
+                  {vllmProviders.flatMap((p) =>
+                    (p.models?.length ? p.models : []).map((name) => (
+                      <span
+                        key={`${p.id}-${name}`}
+                        className="px-2.5 py-1 rounded-lg bg-surface-700 text-slate-300 text-sm font-mono"
+                      >
+                        {name}
+                      </span>
+                    )),
+                  )}
+                  {vllmProviders.every((p) => !p.models?.length) && (
+                    <span className="text-slate-500 text-sm">Нет моделей или vLLM недоступен</span>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           <section>
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
               Загрузить модель Ollama
@@ -216,7 +254,7 @@ function CloudModelsTab() {
   })
 
   const cloudProviders = useMemo(
-    () => (providers || []).filter((p) => !['ollama_gpu', 'ollama_cpu'].includes(p.type)),
+    () => (providers || []).filter((p) => CLOUD_PROVIDER_TYPES.includes(p.type as (typeof CLOUD_PROVIDER_TYPES)[number])),
     [providers],
   )
 

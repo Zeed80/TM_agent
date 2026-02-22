@@ -43,11 +43,17 @@ def _get_base_url(provider_type: str, config: dict[str, Any]) -> str:
         return (get_setting("openrouter_base_url") or "https://openrouter.ai/api/v1").rstrip("/")
     if provider_type == "openai":
         return "https://api.openai.com/v1"
+    if provider_type == "anthropic":
+        return "https://api.anthropic.com/v1"
+    if provider_type == "minimax":
+        return "https://api.minimax.chat/v1"
+    if provider_type == "z_ai":
+        raise ValueError(
+            "Для Z.ai укажите base_url в настройках провайдера (Модели → Облачные → Z.ai)."
+        )
     vllm_url = get_setting("vllm_base_url")
     if provider_type == "vllm" and vllm_url:
         return (vllm_url or "").rstrip("/")
-    if provider_type == "anthropic":
-        return "https://api.anthropic.com/v1"
     raise ValueError(f"Неизвестный провайдер или не задан base_url: {provider_type}")
 
 

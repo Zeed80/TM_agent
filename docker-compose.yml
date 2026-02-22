@@ -4,6 +4,8 @@ services:
   # OLLAMA GPU — LLM (qwen3:30b) + VLM (qwen3-vl:14b)
   # Эксклюзивный доступ к VRAM. Модели переключаются
   # через VRAMManager с asyncio.Lock (правило 1).
+  # Данные моделей в /home по умолчанию — после удаления проекта модели сохраняются.
+  # Путь задаётся в .env: OLLAMA_MODELS_PATH (или в Настройках Web UI).
   # ─────────────────────────────────────────────
   ollama-gpu:
     image: ollama/ollama:latest
@@ -12,7 +14,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ollama_gpu_data:/root/.ollama
+      - ${OLLAMA_MODELS_PATH:-/home/ollama-models}/gpu:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_MAX_LOADED_MODELS=1      # Только одна модель в VRAM
@@ -38,7 +40,7 @@ services:
   # ─────────────────────────────────────────────
   # OLLAMA CPU — Embedding (qwen3-embedding) + Reranker (qwen3-reranker)
   # Работает ТОЛЬКО на CPU (без GPU device allocation).
-  # AMD Ryzen 9 9900X справляется с batch-эмбеддингами.
+  # Данные моделей: OLLAMA_MODELS_PATH/cpu (по умолчанию /home/ollama-models/cpu).
   # ─────────────────────────────────────────────
   ollama-cpu:
     image: ollama/ollama:latest
@@ -47,7 +49,7 @@ services:
     ports:
       - "11435:11434"
     volumes:
-      - ollama_cpu_data:/root/.ollama
+      - ${OLLAMA_MODELS_PATH:-/home/ollama-models}/cpu:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
       - CUDA_VISIBLE_DEVICES=""         # Явно отключаем GPU для этого инстанса
@@ -194,6 +196,7 @@ services:
     environment:
       - OLLAMA_GPU_URL=http://ollama-gpu:11434
       - OLLAMA_CPU_URL=http://ollama-cpu:11434
+      - OLLAMA_MODELS_PATH=${OLLAMA_MODELS_PATH:-/home/ollama-models}
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
@@ -369,8 +372,6 @@ networks:
     driver: bridge
 
 volumes:
-  ollama_gpu_data:      # Веса GPU-моделей (qwen3:30b, qwen3-vl:14b)
-  ollama_cpu_data:      # Веса CPU-моделей (embedding, reranker)
   qdrant_data:          # Индексы и векторы Qdrant
   neo4j_data:           # Граф Neo4j
   neo4j_logs:           # Логи Neo4j
