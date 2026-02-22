@@ -66,7 +66,15 @@ ROUTE_BLOCK="  handle /openclaw {
     redir /openclaw/__openclaw__/canvas/ permanent
   }
   handle_path /openclaw* {
-    reverse_proxy openclaw:18789
+    @with_token query token *
+    handle @with_token {
+      reverse_proxy openclaw:18789 {
+        header_up Authorization "Bearer {query.token}"
+      }
+    }
+    handle {
+      reverse_proxy openclaw:18789
+    }
   }
   handle {
   encode gzip zstd

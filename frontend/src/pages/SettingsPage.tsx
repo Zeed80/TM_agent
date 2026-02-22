@@ -300,10 +300,12 @@ export default function SettingsPage() {
     if (activeTab === 'openclaw') {
       const origin = typeof window !== 'undefined' ? window.location.origin : ''
       const canvasPath = openclawToken?.canvas_path ?? '/openclaw/__openclaw__/canvas/'
+      const enc = openclawToken ? encodeURIComponent(openclawToken.token) : ''
+      // Токен в query (?token=) — отправляется на сервер при первом запросе; в hash (#token=) — для клиентского JS OpenClaw
       const canvasUrlWithToken = openclawToken
-        ? `${origin}${canvasPath}#token=${encodeURIComponent(openclawToken.token)}`
+        ? `${origin}${canvasPath}?token=${enc}#token=${enc}`
         : `${origin}${canvasPath}`
-      const directPortUrl = openclawToken ? `${origin}:18789/#token=${encodeURIComponent(openclawToken.token)}` : ''
+      const directPortUrl = openclawToken ? `${origin}:18789/?token=${enc}#token=${enc}` : ''
       return (
         <div className="space-y-6">
           <section className="card p-5">
