@@ -5,67 +5,74 @@ import { uploadFile, ApiError } from '../api/client'
 import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
 
+// Единый список форматов для всех типов документов: графика, PDF, Office, CAD и т.д.
+const ACCEPT_ALL_DOCUMENTS =
+  '.png,.jpg,.jpeg,.webp,.gif,.bmp,.tiff,.tif,.svg,.ico,' +
+  '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.odg,.odf,.odm,.odb,' +
+  '.txt,.rtf,.csv,.md,.xml,.eml,.msg,' +
+  '.dwg,.dxf,.step,.stp,.stpz,.iges,.igs,.stl,.3ds,.obj,.ifc,.rvt,.rfa,.skp,.fcstd,.blend,.max,.ipt,.iam,.sldprt,.sldasm,.prt,.asm,.catpart,.catproduct'
+
 const FOLDERS = [
   {
     id: 'blueprints',
     label: 'Чертежи',
-    description: 'PNG, JPEG, PDF, TIFF — чертежи деталей и узлов',
+    description: 'Любые форматы: графика, PDF, CAD (DWG, DXF, STEP и др.)',
     icon: Image,
-    accept: '.png,.jpg,.jpeg,.webp,.pdf,.tiff,.tif',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-blue-400',
     bg: 'bg-blue-400/10 border-blue-400/20',
   },
   {
     id: 'invoices',
     label: 'Счета',
-    description: 'PNG, JPEG, PDF, TIFF — счета, накладные, акты',
+    description: 'Любые форматы: графика, PDF, Office',
     icon: FileText,
-    accept: '.png,.jpg,.jpeg,.webp,.pdf,.tiff,.tif',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-teal-400',
     bg: 'bg-teal-400/10 border-teal-400/20',
   },
   {
     id: 'manuals',
     label: 'Инструкции',
-    description: 'PDF, DOCX, TXT — руководства по эксплуатации',
+    description: 'Любые форматы: PDF, Office, графика, текст',
     icon: FileText,
-    accept: '.pdf,.docx,.doc,.txt',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-emerald-400',
     bg: 'bg-emerald-400/10 border-emerald-400/20',
   },
   {
     id: 'gosts',
     label: 'ГОСТы',
-    description: 'PDF, DOCX — стандарты и нормативные документы',
+    description: 'Любые форматы: PDF, Office, графика',
     icon: FileText,
-    accept: '.pdf,.docx,.doc',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-violet-400',
     bg: 'bg-violet-400/10 border-violet-400/20',
   },
   {
     id: 'emails',
     label: 'Переписка',
-    description: 'EML, MSG, TXT — деловая переписка',
+    description: 'Любые форматы: EML, MSG, PDF, Office, текст',
     icon: FileText,
-    accept: '.eml,.msg,.txt',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-amber-400',
     bg: 'bg-amber-400/10 border-amber-400/20',
   },
   {
     id: 'catalogs',
     label: 'Каталоги',
-    description: 'XLSX, CSV — каталоги инструмента и материалов',
+    description: 'Любые форматы: XLSX, CSV, PDF, Office',
     icon: Table,
-    accept: '.xlsx,.xls,.csv',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-cyan-400',
     bg: 'bg-cyan-400/10 border-cyan-400/20',
   },
   {
     id: 'tech_processes',
     label: 'Техпроцессы',
-    description: 'XLSX, CSV — маршрутные карты и операции',
+    description: 'Любые форматы: XLSX, CSV, PDF, Office, CAD',
     icon: Table,
-    accept: '.xlsx,.xls,.csv',
+    accept: ACCEPT_ALL_DOCUMENTS,
     color: 'text-rose-400',
     bg: 'bg-rose-400/10 border-rose-400/20',
   },
@@ -304,7 +311,7 @@ export default function UploadPage() {
           </p>
           <p className="text-xs text-slate-500 mt-2">
             Папка: <span className={selectedFolderInfo.color}>{selectedFolderInfo.label}</span>
-            {' '}&middot; {selectedFolderInfo.accept.replace(/\./g, '').toUpperCase()} &middot; до 50 МБ
+            {' '}&middot; любые форматы документов &middot; до 50 МБ
           </p>
           <input
             ref={fileInputRef}

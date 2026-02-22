@@ -2,14 +2,8 @@
 Роутер загрузки файлов через веб-интерфейс.
 
 Endpoint: POST /api/v1/files/upload/{folder}
-Поддерживаемые папки:
-  blueprints     — чертежи (PNG, JPEG, PDF)
-  invoices       — счета (PNG, JPEG, PDF и др. графические)
-  manuals        — инструкции по эксплуатации (PDF, DOCX)
-  gosts          — ГОСТы и стандарты (PDF)
-  emails         — деловая переписка (EML, MSG, TXT)
-  catalogs       — каталоги номенклатуры (XLSX, CSV)
-  tech_processes — техпроцессы (XLSX, CSV)
+Все папки принимают любые форматы документов: графика, PDF, Office, CAD и т.д.
+Папки: blueprints, invoices, manuals, gosts, emails, catalogs, tech_processes.
 
 Файлы сохраняются в Docker-volume /app/documents/<folder>/
 и регистрируются в таблице uploaded_files PostgreSQL.
@@ -31,15 +25,28 @@ from src.db.postgres_client import postgres_client as _pg
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
 logger = logging.getLogger(__name__)
 
-# Разрешённые типы папок и расширений
-_FOLDER_EXTENSIONS: dict[str, set[str]] = {
-    "blueprints":     {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".tiff", ".tif"},
-    "invoices":       {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".tiff", ".tif"},
-    "manuals":        {".pdf", ".docx", ".doc", ".txt"},
-    "gosts":          {".pdf", ".docx", ".doc"},
-    "emails":         {".eml", ".msg", ".txt"},
-    "catalogs":       {".xlsx", ".xls", ".csv"},
-    "tech_processes": {".xlsx", ".xls", ".csv"},
+# Единый набор разрешённых расширений для всех типов документов (графика, PDF, Office, CAD и т.д.)
+_ALLOWED_EXTENSIONS: set[str] = {
+    # Графика
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif", ".svg", ".ico",
+    # PDF и документы
+    ".pdf",
+    # Microsoft Office
+    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    # OpenDocument
+    ".odt", ".ods", ".odp", ".odg", ".odf", ".odm", ".odb",
+    # Текст и таблицы
+    ".txt", ".rtf", ".csv", ".md", ".xml",
+    # Письма
+    ".eml", ".msg",
+    # CAD и 3D
+    ".dwg", ".dxf", ".step", ".stp", ".stpz", ".iges", ".igs", ".stl", ".3ds", ".obj",
+    ".ifc", ".rvt", ".rfa", ".skp", ".fcstd", ".blend", ".max", ".ipt", ".iam",
+    ".sldprt", ".sldasm", ".prt", ".asm", ".catpart", ".catproduct",
+}
+
+_ALLOWED_FOLDERS: set[str] = {
+    "blueprints", "invoices", "manuals", "gosts", "emails", "catalogs", "tech_processes",
 }
 
 # Максимальный размер файла: 50 МБ
@@ -77,22 +84,21 @@ async def upload_file(
     Файл сохраняется в /app/documents/<folder>/ и регистрируется в БД.
     """
     # Валидация папки
-    if folder not in _FOLDER_EXTENSIONS:
+    if folder not in _ALLOWED_FOLDERS:
         raise HTTPException(
             status_code=400,
             detail=f"Недопустимая папка '{folder}'. "
-                   f"Разрешённые: {', '.join(_FOLDER_EXTENSIONS.keys())}",
+                   f"Разрешённые: {', '.join(sorted(_ALLOWED_FOLDERS))}",
         )
 
-    # Валидация расширения файла
+    # Валидация расширения файла (единый набор для всех папок)
     original_name = file.filename or "unknown"
     suffix = Path(original_name).suffix.lower()
-    allowed = _FOLDER_EXTENSIONS[folder]
-    if suffix not in allowed:
+    if suffix not in _ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Недопустимый тип файла '{suffix}' для папки '{folder}'. "
-                   f"Разрешены: {', '.join(sorted(allowed))}",
+            detail=f"Недопустимый тип файла '{suffix}'. "
+                   f"Разрешены форматы документов: графика, PDF, Office, CAD и др.",
         )
 
     # Читаем файл в память
@@ -171,7 +177,7 @@ async def list_files(
         params["uid"] = str(current_user["id"])
 
     if folder:
-        if folder not in _FOLDER_EXTENSIONS:
+        if folder not in _ALLOWED_FOLDERS:
             raise HTTPException(status_code=400, detail=f"Недопустимая папка '{folder}'.")
         conditions.append("folder = :folder")
         params["folder"] = folder
