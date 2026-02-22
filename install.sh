@@ -15,8 +15,8 @@
 #   5. Создаёт структуру директорий
 #   6. Собирает и запускает Docker-контейнеры
 #   7. Настраивает HTTPS (Let's Encrypt для домена, self-signed для IP)
-#   8. Создаёт пользователя admin с указанным паролем
-#   9. Ждёт готовности PostgreSQL (схема 01–05 применяется автоматически при первом запуске)
+#   8. Ждёт готовности PostgreSQL (схема 01–05 применяется автоматически при первом запуске)
+#   9. Создаёт пользователя admin с указанным паролем
 #  10. Инициализирует Neo4j и Qdrant, показывает адрес доступа
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -415,10 +415,13 @@ if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
     "${ADMIN_PASSWORD}" 2>/dev/null || echo "")
 
   if [[ -n "$ADMIN_HASH" ]]; then
+    # Экранируем одинарные кавычки для безопасной подстановки в SQL (PostgreSQL: ' → '')
+    SAFE_USERNAME=$(printf '%s' "${ADMIN_USERNAME:-admin}" | sed "s/'/''/g")
+    SAFE_FULLNAME=$(printf '%s' "${ADMIN_FULLNAME:-Администратор}" | sed "s/'/''/g")
     # Создаём пользователя в БД
     docker compose exec -T postgres psql -U enterprise -d enterprise_ai -c "
 INSERT INTO users (username, full_name, password_hash, role)
-VALUES ('${ADMIN_USERNAME:-admin}', '${ADMIN_FULLNAME:-Администратор}', '${ADMIN_HASH}', 'admin')
+VALUES ('${SAFE_USERNAME}', '${SAFE_FULLNAME}', '${ADMIN_HASH}', 'admin')
 ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 " 2>/dev/null && log_ok "Пользователь '${ADMIN_USERNAME:-admin}' создан" \
   || log_warn "Не удалось создать пользователя (возможно, уже существует)"
