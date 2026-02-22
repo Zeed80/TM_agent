@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Save, Loader2, AlertCircle } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Cpu, Database, Bot, MessageSquare, Settings2 } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { LocalModelsTab, AssignmentsBlock, CloudModelsTab } from './ModelsPage'
+import clsx from 'clsx'
 
 type SettingsMap = Record<string, string | number | boolean | null>
 
-const SECTIONS: { title: string; keys: { key: keyof SettingsMap; label: string; type: 'text' | 'number' | 'boolean'; placeholder?: string }[] }[] = [
+type SectionDef = {
+  title: string
+  keys: { key: keyof SettingsMap; label: string; type: 'text' | 'number' | 'boolean'; placeholder?: string }[]
+}
+
+const SECTIONS: SectionDef[] = [
   {
     title: 'Модели (Ollama) — имена по умолчанию',
     keys: [
@@ -55,7 +61,7 @@ const SECTIONS: { title: string; keys: { key: keyof SettingsMap; label: string; 
     ],
   },
   {
-    title: 'Облачные провайдеры',
+    title: 'Облачные провайдеры (таймауты и URL)',
     keys: [
       { key: 'cloud_llm_timeout', label: 'Облачный LLM таймаут (с)', type: 'number' },
       { key: 'cloud_embedding_timeout', label: 'Облачный Embedding таймаут (с)', type: 'number' },
@@ -85,12 +91,82 @@ const SECTIONS: { title: string; keys: { key: keyof SettingsMap; label: string; 
   },
 ]
 
+const MAIN_TABS = [
+  { id: 'models' as const, label: 'Модели', icon: Cpu },
+  { id: 'databases' as const, label: 'Базы данных', icon: Database },
+  { id: 'openclaw' as const, label: 'OpenClaw', icon: Bot },
+  { id: 'chat' as const, label: 'Чат и сервисы', icon: MessageSquare },
+  { id: 'other' as const, label: 'Прочее', icon: Settings2 },
+] as const
+
+const MODEL_SUB_TABS = [
+  { id: 'local' as const, label: 'Локальные' },
+  { id: 'cloud' as const, label: 'Облачные' },
+] as const
+
+function renderSection(
+  section: SectionDef,
+  form: SettingsMap,
+  handleChange: (key: string, value: string | number | boolean) => void,
+) {
+  return (
+    <section key={section.title} className="card p-5">
+      <h2 className="text-sm font-semibold text-slate-300 mb-4 border-b border-surface-700 pb-2">
+        {section.title}
+      </h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {section.keys.map(({ key, label, type, placeholder }) => {
+          const value = form[key]
+          if (type === 'boolean') {
+            return (
+              <div key={key} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id={key}
+                  checked={value === true}
+                  onChange={(e) => handleChange(key, e.target.checked)}
+                  className="rounded border-surface-600 bg-surface-800 text-brand-500 focus:ring-brand-500"
+                />
+                <label htmlFor={key} className="text-sm text-slate-300">
+                  {label}
+                </label>
+              </div>
+            )
+          }
+          return (
+            <div key={key}>
+              <label htmlFor={key} className="block text-xs text-slate-500 mb-1">
+                {label}
+              </label>
+              <input
+                id={key}
+                type={type}
+                value={value == null ? '' : String(value)}
+                onChange={(e) =>
+                  handleChange(
+                    key,
+                    type === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value
+                  )
+                }
+                placeholder={placeholder}
+                className="w-full px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm"
+              />
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export default function SettingsPage() {
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'admin'
   const queryClient = useQueryClient()
   const [form, setForm] = useState<SettingsMap>({})
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [activeTab, setActiveTab] = useState<(typeof MAIN_TABS)[number]['id']>('models')
+  const [modelSubTab, setModelSubTab] = useState<(typeof MODEL_SUB_TABS)[number]['id']>('local')
 
   const { data: settings, isLoading } = useQuery<SettingsMap>({
     queryKey: ['settings'],
@@ -138,124 +214,168 @@ export default function SettingsPage() {
 
   if (isLoading || !form || Object.keys(form).length === 0) {
     return (
-      <div className="p-6 flex items-center gap-2 text-slate-400">
+      <div className="flex-1 overflow-y-auto p-6 flex items-center gap-2 text-slate-400">
         <Loader2 size={20} className="animate-spin" />
         <span>Загрузка настроек...</span>
       </div>
     )
   }
 
+  const sectionQdrant = SECTIONS[3]
+  const sectionOpenClaw = SECTIONS[6]
+  const sectionsChat = [SECTIONS[2], SECTIONS[4], SECTIONS[7]]
+  const sectionOther = SECTIONS[8]
+  const sectionCloudOpts = SECTIONS[5]
+
+  const renderTabContent = () => {
+    if (activeTab === 'models') {
+      return (
+        <div className="space-y-6">
+          {/* Подвкладки: Локальные | Облачные */}
+          <div className="flex gap-1 p-1 rounded-lg bg-surface-800/80 border border-surface-700 w-fit">
+            {MODEL_SUB_TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setModelSubTab(id)}
+                className={clsx(
+                  'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                  modelSubTab === id
+                    ? 'bg-surface-700 text-slate-100 shadow'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-surface-700/50',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {modelSubTab === 'local' && (
+            <>
+              {renderSection(SECTIONS[0], form, handleChange)}
+              {renderSection(SECTIONS[1], form, handleChange)}
+              <section className="card p-5">
+                <h3 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
+                  Загрузка моделей Ollama
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Список загруженных моделей по инстансам. Загрузите модель по имени, затем выберите её в «Назначение по ролям».
+                </p>
+                <LocalModelsTab />
+              </section>
+              <section className="card p-5">
+                <h3 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
+                  Назначение по ролям
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Выберите модель для чата, анализа чертежей, поиска и переранжирования. Имеет приоритет над полями «по умолчанию» выше.
+                </p>
+                <AssignmentsBlock />
+              </section>
+            </>
+          )}
+
+          {modelSubTab === 'cloud' && (
+            <>
+              {renderSection(sectionCloudOpts, form, handleChange)}
+              <section className="card p-5">
+                <h3 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
+                  Облачные провайдеры (API-ключи)
+                </h3>
+                <CloudModelsTab />
+              </section>
+            </>
+          )}
+        </div>
+      )
+    }
+
+    if (activeTab === 'databases') {
+      return <div className="space-y-6">{renderSection(sectionQdrant, form, handleChange)}</div>
+    }
+
+    if (activeTab === 'openclaw') {
+      return <div className="space-y-6">{renderSection(sectionOpenClaw, form, handleChange)}</div>
+    }
+
+    if (activeTab === 'chat') {
+      return (
+        <div className="space-y-6">
+          {sectionsChat.map((s) => renderSection(s, form, handleChange))}
+        </div>
+      )
+    }
+
+    if (activeTab === 'other') {
+      return <div className="space-y-6">{renderSection(sectionOther, form, handleChange)}</div>
+    }
+
+    return null
+  }
+
   return (
-    <div className="p-6 max-w-4xl">
-      <h1 className="text-xl font-semibold text-slate-100 mb-2">Настройки системы</h1>
-      <p className="text-sm text-slate-500 mb-6">
-        Все настройки в одном месте: имена моделей по умолчанию, загрузка моделей Ollama, назначение по ролям и API-ключи облачных провайдеров. Значения имеют приоритет над .env. Пароли БД и JWT задаются только в .env.
-      </p>
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="shrink-0 px-4 pt-4 pb-0 border-b border-surface-700 bg-surface-950/80">
+        <h1 className="text-xl font-semibold text-slate-100 mb-2">Настройки системы</h1>
+        <p className="text-sm text-slate-500 mb-4">
+          Значения имеют приоритет над .env. Пароли БД и JWT задаются только в .env.
+        </p>
 
-      {message && (
-        <div
-          className={message.type === 'ok'
-            ? 'mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-sm'
-            : 'mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm flex items-center gap-2'}
-        >
-          {message.type === 'err' && <AlertCircle size={18} />}
-          {message.text}
-        </div>
-      )}
+        {/* Верхний уровень вкладок */}
+        <nav className="flex gap-0.5 -mb-px overflow-x-auto" aria-label="Настройки">
+          {MAIN_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
+                activeTab === id
+                  ? 'border-brand-500 text-brand-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-surface-600',
+              )}
+            >
+              <Icon size={18} className="shrink-0" />
+              {label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {SECTIONS.map((section) => (
-          <section key={section.title} className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-300 mb-4 border-b border-surface-700 pb-2">
-              {section.title}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {section.keys.map(({ key, label, type, placeholder }) => {
-                const value = form[key]
-                if (type === 'boolean') {
-                  return (
-                    <div key={key} className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        id={key}
-                        checked={value === true}
-                        onChange={(e) => handleChange(key, e.target.checked)}
-                        className="rounded border-surface-600 bg-surface-800 text-brand-500 focus:ring-brand-500"
-                      />
-                      <label htmlFor={key} className="text-sm text-slate-300">
-                        {label}
-                      </label>
-                    </div>
-                  )
-                }
-                return (
-                  <div key={key}>
-                    <label htmlFor={key} className="block text-xs text-slate-500 mb-1">
-                      {label}
-                    </label>
-                    <input
-                      id={key}
-                      type={type}
-                      value={value == null ? '' : String(value)}
-                      onChange={(e) =>
-                        handleChange(
-                          key,
-                          type === 'number' ? (e.target.value === '' ? 0 : Number(e.target.value)) : e.target.value
-                        )
-                      }
-                      placeholder={placeholder}
-                      className="w-full px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 placeholder:text-slate-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm"
-                    />
-                  </div>
-                )
-              })}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 max-w-4xl mx-auto pb-10">
+          {message && (
+            <div
+              className={clsx(
+                'mb-6 p-3 rounded-lg text-sm flex items-center gap-2',
+                message.type === 'ok'
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-300'
+                  : 'bg-red-500/10 border border-red-500/30 text-red-300',
+              )}
+            >
+              {message.type === 'err' && <AlertCircle size={18} />}
+              {message.text}
             </div>
-          </section>
-        ))}
+          )}
 
-        {/* Загрузка моделей Ollama и назначение по ролям — единый блок настроек моделей */}
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
-            Загрузка моделей Ollama
-          </h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Загрузите модель по имени (например qwen3:30b), затем выберите её в «Назначение по ролям» ниже.
-          </p>
-          <LocalModelsTab />
-        </section>
+          {renderTabContent()}
 
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
-            Назначение по ролям
-          </h2>
-          <p className="text-xs text-slate-500 mb-4">
-            Выберите, какая модель используется для чата, анализа чертежей, поиска и переранжирования. Имеет приоритет над полями «по умолчанию» выше.
-          </p>
-          <AssignmentsBlock />
-        </section>
-
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold text-slate-300 mb-2 border-b border-surface-700 pb-2">
-            Облачные провайдеры (API-ключи)
-          </h2>
-          <CloudModelsTab />
-        </section>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={patchSettings.isPending}
-            className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium flex items-center gap-2 disabled:opacity-50"
-          >
-            {patchSettings.isPending ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Save size={18} />
-            )}
-            Сохранить настройки
-          </button>
-        </div>
-      </form>
+          <div className="flex justify-end pt-8 mt-6 border-t border-surface-700">
+            <button
+              type="submit"
+              disabled={patchSettings.isPending}
+              className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              {patchSettings.isPending ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              Сохранить настройки
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
