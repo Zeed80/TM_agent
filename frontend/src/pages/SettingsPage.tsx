@@ -298,7 +298,12 @@ export default function SettingsPage() {
     }
 
     if (activeTab === 'openclaw') {
-      const canvasUrl = typeof window !== 'undefined' ? `${window.location.origin}${openclawToken?.canvas_path ?? '/openclaw/__openclaw__/canvas/'}` : ''
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      const canvasPath = openclawToken?.canvas_path ?? '/openclaw/__openclaw__/canvas/'
+      const canvasUrlWithToken = openclawToken
+        ? `${origin}${canvasPath}#token=${encodeURIComponent(openclawToken.token)}`
+        : `${origin}${canvasPath}`
+      const directPortUrl = openclawToken ? `${origin}:18789/#token=${encodeURIComponent(openclawToken.token)}` : ''
       return (
         <div className="space-y-6">
           <section className="card p-5">
@@ -307,7 +312,7 @@ export default function SettingsPage() {
               Вход в веб-интерфейс OpenClaw (Control UI)
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              При открытии страницы OpenClaw отображается «Unauthorized» — нужен токен gateway. Нажмите «Показать токен», скопируйте его, откройте ссылку ниже, в настройках Control UI вставьте токен в поле Auth и подключитесь.
+              OpenClaw запускается по ссылке с токеном в хеше: <code className="text-slate-400">домен/#token=...</code> или <code className="text-slate-400">домен:18789/#token=...</code>. Нажмите «Показать токен», затем «Открыть OpenClaw» — откроется ссылка с токеном.
             </p>
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <button
@@ -332,7 +337,7 @@ export default function SettingsPage() {
                 Показать токен
               </button>
               <a
-                href={canvasUrl || '/openclaw/__openclaw__/canvas/'}
+                href={openclawToken ? canvasUrlWithToken : `${origin}${canvasPath}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-200 text-sm font-medium flex items-center gap-2"
@@ -345,24 +350,46 @@ export default function SettingsPage() {
               <p className="text-sm text-red-400 mb-2">{openclawTokenError}</p>
             )}
             {openclawToken && (
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-500">Токен (вставьте в Control UI → настройки → Auth)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={openclawToken.token}
-                    className="flex-1 px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 font-mono text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(openclawToken.token)}
-                    className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 flex items-center gap-1"
-                    title="Копировать"
-                  >
-                    <Copy size={14} />
-                    Копировать
-                  </button>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Ссылка для входа (через прокси)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={canvasUrlWithToken}
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 font-mono text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(canvasUrlWithToken)}
+                      className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 flex items-center gap-1 shrink-0"
+                      title="Копировать"
+                    >
+                      <Copy size={14} />
+                      Копировать
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Прямой вход (домен:18789)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={directPortUrl}
+                      className="flex-1 px-3 py-2 rounded-lg bg-surface-800 border border-surface-600 text-slate-200 font-mono text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(directPortUrl)}
+                      className="px-3 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-slate-300 flex items-center gap-1 shrink-0"
+                      title="Копировать"
+                    >
+                      <Copy size={14} />
+                      Копировать
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
