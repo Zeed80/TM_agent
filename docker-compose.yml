@@ -158,6 +158,7 @@ services:
       - ./infra/postgres/02_users.sql:/docker-entrypoint-initdb.d/02_users.sql:ro
       - ./infra/postgres/03_model_providers.sql:/docker-entrypoint-initdb.d/03_model_providers.sql:ro
       - ./infra/postgres/04_provider_api_keys.sql:/docker-entrypoint-initdb.d/04_provider_api_keys.sql:ro
+      - ./infra/postgres/05_app_settings.sql:/docker-entrypoint-initdb.d/05_app_settings.sql:ro
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}

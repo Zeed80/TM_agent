@@ -108,7 +108,7 @@ init-db: ## Инициализировать схему Neo4j (constraints + ind
 		-f /var/lib/neo4j/import/init.cypher
 	@echo "✓ Схема Neo4j инициализирована"
 
-init-pg: ## Применить схему users/chat и model_providers к существующей БД. Нужно после teardown или если таблиц нет.
+init-pg: ## Применить миграции к существующей БД (02–05). При новой установке не нужен: скрипты из docker-entrypoint-initdb.d выполняются при первом запуске контейнера.
 	@echo "→ Применение схемы users, chat_sessions, chat_messages, uploaded_files..."
 	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" < infra/postgres/02_users.sql
 	@echo "→ Применение схемы model_providers, model_assignments..."

@@ -11,13 +11,13 @@
 #   1. Проверяет и устанавливает Docker Engine + Compose
 #   2. Устанавливает NVIDIA Container Toolkit (если есть GPU)
 #   3. Запрашивает конфигурацию (домен/IP, пароли, email)
-#   4. Генерирует .env файл
+#   4. Генерирует .env (пароли БД, JWT, домен; остальное настраивается в Web UI)
 #   5. Создаёт структуру директорий
 #   6. Собирает и запускает Docker-контейнеры
 #   7. Настраивает HTTPS (Let's Encrypt для домена, self-signed для IP)
 #   8. Создаёт пользователя admin с указанным паролем
-#   9. Инициализирует базы данных
-#  10. Показывает адрес доступа
+#   9. Ждёт готовности PostgreSQL (схема 01–05 применяется автоматически при первом запуске)
+#  10. Инициализирует Neo4j и Qdrant, показывает адрес доступа
 # ═══════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -386,8 +386,11 @@ echo
 
 log_ok "Сервисы запущены"
 
-# ── Шаг 8: Инициализация PostgreSQL ──────────────────────────────────
-log_step "Инициализация базы данных"
+# ── Шаг 8: Ожидание PostgreSQL ───────────────────────────────────────
+# Схема (01_init, 02_users, 03_model_providers, 04_provider_api_keys, 05_app_settings)
+# применяется автоматически при первом запуске контейнера (docker-entrypoint-initdb.d).
+# make init-pg нужен только для уже существующей БД при добавлении новых миграций.
+log_step "Проверка базы данных PostgreSQL"
 
 log_info "Ожидаем готовности PostgreSQL..."
 WAIT=0
@@ -406,12 +409,10 @@ log_step "Создание пользователя администратора
 if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
   log_info "Генерируем bcrypt-хэш пароля..."
 
-  # Генерируем хэш через Python passlib внутри API-контейнера
-  ADMIN_HASH=$(docker compose exec -T api python3 -c "
-from passlib.context import CryptContext
-ctx = CryptContext(schemes=['bcrypt'], deprecated='auto')
-print(ctx.hash('${ADMIN_PASSWORD}'))
-" 2>/dev/null || echo "")
+  # Генерируем bcrypt-хэш через API-контейнер (пароль передаём аргументом — безопасно для спецсимволов)
+  ADMIN_HASH=$(docker compose exec -T api python3 -c \
+    "import bcrypt,sys; p=sys.argv[1].encode('utf-8')[:72]; print(bcrypt.hashpw(p,bcrypt.gensalt()).decode())" \
+    "${ADMIN_PASSWORD}" 2>/dev/null || echo "")
 
   if [[ -n "$ADMIN_HASH" ]]; then
     # Создаём пользователя в БД
@@ -508,8 +509,10 @@ echo -e "  4. Запустите индексацию: через Admin panel и
 echo -e "  5. Подключите Telegram-бота: ${CYAN}make openclaw-pair${NC}"
 echo
 echo -e "${BOLD}Управление из браузера:${NC}"
-echo -e "  ${CYAN}${ACCESS_URL}/admin${NC}  — контейнеры, логи, метрики, модели"
-echo -e "  ${CYAN}${ACCESS_URL}/users${NC}  — пользователи и роли"
+echo -e "  ${CYAN}${ACCESS_URL}/admin${NC}    — контейнеры, логи, метрики, модели"
+echo -e "  ${CYAN}${ACCESS_URL}/settings${NC} — настройки системы (модели, таймауты, OpenClaw; приоритет над .env)"
+echo -e "  ${CYAN}${ACCESS_URL}/users${NC}    — пользователи и роли"
+echo -e "  ${YELLOW}.env нужен только для паролей БД, JWT, домена и Telegram. Остальное — в Web UI (Настройки).${NC}"
 echo
 echo -e "${BOLD}Управление из командной строки (на сервере):${NC}"
 echo -e "  ${CYAN}make status${NC}       — статус сервисов и URL"
