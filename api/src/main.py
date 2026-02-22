@@ -36,7 +36,6 @@ async def lifespan(app: FastAPI):
 
     logger.info("Загрузка настроек из БД...")
     await load_from_db()
-    _add_cors_middleware(app)
 
     logger.info("Подключение к Qdrant...")
     await qdrant_client.connect()
@@ -77,18 +76,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS — добавляется в lifespan после загрузки настроек из БД ───────
-def _add_cors_middleware(app: FastAPI) -> None:
-    origins = [o.strip() for o in (get_setting("cors_origins") or "").split(",") if o.strip()]
-    if not origins:
-        origins = ["*"]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# ── CORS — регистрируется при создании приложения (middleware нельзя добавлять после старта).
+# Значение берётся из get_setting (при первом запуске — из .env, т.к. БД ещё не загружена).
+# Изменение CORS в Web UI вступит в силу после перезапуска API.
+_cors_origins = [o.strip() for o in (get_setting("cors_origins") or "").split(",") if o.strip()]
+if not _cors_origins:
+    _cors_origins = ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ── Health & root ─────────────────────────────────────────────────────
