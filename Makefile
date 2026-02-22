@@ -7,7 +7,7 @@ SHELL := /bin/bash
 
 .PHONY: help up down restart ps logs logs-all logs-caddy logs-api logs-gpu \
         update update-openclaw update-api update-frontend openclaw-pair \
-        restart-caddy \
+        restart-caddy check-web \
         init-db init-pg init-qdrant pull-models \
         ingest-excel ingest-pdf ingest-blueprints ingest-techprocess ingest-all \
         shell-api shell-neo4j shell-pg shell-qdrant \
@@ -88,6 +88,28 @@ logs-caddy: ## Логи Caddy (HTTPS / Let's Encrypt)
 
 restart-caddy: ## Перезапустить Caddy (обновить конфиг)
 	docker compose restart caddy
+
+check-web: ## Диагностика: почему не открывается веб-интерфейс
+	@echo "=== Контейнеры (caddy, frontend, api) ==="
+	@docker compose ps
+	@echo ""
+	@echo "=== SERVER_HOST из .env ==="
+	@grep '^SERVER_HOST=' .env 2>/dev/null || echo "  .env не найден или SERVER_HOST не задан"
+	@echo ""
+	@echo "=== Ответ Caddy по SERVER_HOST (ожидается 200) ==="
+	@H=$$(grep '^SERVER_HOST=' .env 2>/dev/null | cut -d= -f2- | sed 's/^"//;s/"$$//'); \
+	  if [ -n "$$H" ]; then \
+	    code=$$(curl -k -s -o /dev/null -w "%{http_code}" "https://$$H/" 2>/dev/null || echo "err"); \
+	    echo "  https://$$H/ -> HTTP $$code"; \
+	  else echo "  Задайте SERVER_HOST в .env"; fi
+	@echo ""
+	@echo "=== Доступность frontend:3000 из контейнера caddy ==="
+	@docker compose exec -T caddy wget -qO- --timeout=3 http://frontend:3000/ 2>/dev/null | head -c 80 && echo " ... OK" || echo "  Таймаут или ошибка"
+	@echo ""
+	@echo "=== Последние логи Caddy ==="
+	@docker compose logs caddy --tail 12
+	@echo ""
+	@echo "Подробнее: docs/TROUBLESHOOTING_WEB.md"
 
 create-admin: ## Создать/обновить пользователя admin (запрашивает пароль)
 	@read -sp "Пароль для admin: " PASS && echo "" && \
