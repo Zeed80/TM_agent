@@ -16,6 +16,7 @@ import email
 import logging
 import re
 import uuid
+from datetime import datetime
 from email import policy as email_policy
 from pathlib import Path
 from typing import Iterator
@@ -52,6 +53,56 @@ INVOICES_DIR = Path(settings.documents_dir) / "invoices"
 
 # BM25 модель (Правило 3)
 _bm25_model = SparseTextEmbedding("Qdrant/bm25")
+
+
+# ── PostgreSQL функция ────────────────────────────────────────────────────
+
+async def update_file_status(
+    file_path: str,
+    status: str = "indexed",
+    error_msg: str | None = None,
+):
+    """Обновляет статус файла в таблице uploaded_files."""
+    import asyncpg
+
+    try:
+        conn = await asyncpg.connect(settings.postgres_dsn)
+        if status == "indexed":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = NULL, indexed_at = $2
+                WHERE file_path = $3
+                """,
+                status,
+                datetime.now(),
+                file_path,
+            )
+        elif status == "processing":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = NULL
+                WHERE file_path = $2
+                """,
+                status,
+                file_path,
+            )
+        elif status == "error":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = $2, indexed_at = NULL
+                WHERE file_path = $3
+                """,
+                status,
+                error_msg,
+                file_path,
+            )
+        await conn.close()
+        logger.info(f"Обновлён статус файла {file_path}: {status}")
+    except Exception as exc:
+        logger.warning(f"Не удалось обновить статус файла {file_path}: {exc}")
 
 
 # ── Текстовые утилиты ─────────────────────────────────────────────────────────
@@ -276,6 +327,10 @@ async def process_directory(
     total = 0
     for filepath in tqdm(files, desc=f"[{source_type}]"):
         logger.info(f"  Обработка: {filepath.name}")
+        file_path_str = str(filepath)
+
+        # Обновляем статус на processing
+        await update_file_status(file_path_str, "processing")
 
         # Извлечение текста
         try:
@@ -293,10 +348,12 @@ async def process_directory(
                 continue
         except Exception as exc:
             logger.error(f"  Ошибка чтения {filepath.name}: {exc}")
+            await update_file_status(file_path_str, "error", str(exc))
             continue
 
         if not text.strip():
             logger.warning(f"  Пустой текст: {filepath.name}")
+            await update_file_status(file_path_str, "error", "Пустой текст")
             continue
 
         # Разбивка на чанки
@@ -316,9 +373,16 @@ async def process_directory(
         ]
 
         # Загрузка в Qdrant
-        uploaded = await upsert_chunks_to_qdrant(qdrant, chunks, metadata_list)
-        total += uploaded
-        logger.info(f"  ✓ Загружено чанков: {uploaded}")
+        try:
+            uploaded = await upsert_chunks_to_qdrant(qdrant, chunks, metadata_list)
+            total += uploaded
+            logger.info(f"  ✓ Загружено чанков: {uploaded}")
+
+            # Обновляем статус на indexed
+            await update_file_status(file_path_str, "indexed")
+        except Exception as exc:
+            logger.error(f"  Ошибка загрузки {filepath.name}: {exc}")
+            await update_file_status(file_path_str, "error", str(exc))
 
     return total
 

@@ -6,9 +6,10 @@ import {
   Cpu, HardDrive, MemoryStick, Clock, Zap,
   ChevronRight, AlertCircle, CheckCircle, XCircle,
   PackageOpen, Database, X, Loader2, Activity,
-  Terminal, ChevronDown
+  Terminal, ChevronDown, Upload, Filter
 } from 'lucide-react'
 import { api } from '../api/client'
+import { getToken } from '../api/client'
 import clsx from 'clsx'
 
 // ── Типы ─────────────────────────────────────────────────────────────
@@ -415,6 +416,148 @@ function SystemMetricsBar({ data }: { data: SystemInfo }) {
   )
 }
 
+
+// ── Компонент: индексация файлов ──────────────────────────────────────────
+function IndexingFilesPanel() {
+  const [indexingStatus, setIndexingStatus] = useState<any[]>([])
+  const [summary, setSummary] = useState({
+    uploaded: 0,
+    processing: 0,
+    indexed: 0,
+    error: 0,
+  })
+  const [filterStatus, setFilterStatus] = useState<string | null>(null)
+  const [filterFolder, setFilterFolder] = useState<string | null>(null)
+
+  useEffect(() => {
+    const eventSource = new EventSource('/api/v1/indexing/status', {
+      withCredentials: true,
+    })
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'status') {
+          setSummary(data.summary)
+          setIndexingStatus(data.files)
+        }
+      } catch (err) {
+        console.error('Ошибка SSE:', err)
+      }
+    }
+
+    eventSource.onerror = () => {
+      console.error('SSE соединение разорвано')
+      eventSource.close()
+    }
+
+    return () => {
+      eventSource.close()
+    }
+  }, [])
+
+  const filteredFiles = indexingStatus.filter((file) => {
+    if (filterStatus && file.status !== filterStatus) return false
+    if (filterFolder && file.folder !== filterFolder) return false
+    return true
+  })
+
+  const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+    uploaded: { bg: 'bg-slate-500/15', text: 'text-slate-400', label: 'Загружен' },
+    processing: { bg: 'bg-amber-500/15', text: 'text-amber-400', label: 'Индексация' },
+    indexed: { bg: 'bg-green-500/15', text: 'text-green-400', label: 'Индексирован' },
+    error: { bg: 'bg-red-500/15', text: 'text-red-400', label: 'Ошибка' },
+  }
+
+  const folders = ['blueprints', 'invoices', 'manuals', 'gosts', 'emails', 'catalogs', 'tech_processes']
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-slate-200">Файлы и индексация</h2>
+        <div className="flex items-center gap-2">
+          {/* Фильтр по статусу */}
+          <select
+            value={filterStatus || ''}
+            onChange={(e) => setFilterStatus(e.target.value || null)}
+            className="bg-surface-700 border border-surface-600 text-xs text-slate-300 rounded px-2 py-1 focus:outline-none"
+          >
+            <option value="">Все статусы</option>
+            <option value="uploaded">Загружен</option>
+            <option value="processing">Индексация</option>
+            <option value="indexed">Индексирован</option>
+            <option value="error">Ошибка</option>
+          </select>
+
+          {/* Фильтр по папке */}
+          <select
+            value={filterFolder || ''}
+            onChange={(e) => setFilterFolder(e.target.value || null)}
+            className="bg-surface-700 border border-surface-600 text-xs text-slate-300 rounded px-2 py-1 focus:outline-none"
+          >
+            <option value="">Все папки</option>
+            {folders.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Сводка */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {Object.entries(summary).map(([status, count]) => {
+          const colors = STATUS_COLORS[status]
+          return (
+            <div key={status} className={clsx('p-3 rounded-lg border', colors.bg, 'border-surface-700')}>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{status}</p>
+              <p className={clsx('text-xl font-bold', colors.text)}>{count}</p>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Список файлов */}
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        {filteredFiles.map((file) => {
+          const colors = STATUS_COLORS[file.status]
+          return (
+            <div key={file.id} className="p-3 bg-surface-800 rounded-lg border border-surface-700">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-200 truncate font-medium">{file.filename}</p>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+                    <span>{file.folder}</span>
+                    <span>·</span>
+                    <span>{new Date(file.created_at).toLocaleDateString('ru-RU')}</span>
+                    {file.indexed_at && (
+                      <>
+                        <span>·</span>
+                        <span>Индексирован: {new Date(file.indexed_at).toLocaleDateString('ru-RU')}</span>
+                      </>
+                    )}
+                  </div>
+                  {file.error_msg && (
+                    <p className="text-xs text-red-400 mt-1 truncate">{file.error_msg}</p>
+                  )}
+                </div>
+                <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', colors.bg, colors.text)}>
+                  {colors.label}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+        {filteredFiles.length === 0 && (
+          <div className="text-center py-8 text-slate-500 text-sm">
+            Нет файлов с выбранными фильтрами
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 // ── Главная страница ──────────────────────────────────────────────────
 export default function AdminPage() {
   const qc = useQueryClient()
@@ -509,6 +652,9 @@ export default function AdminPage() {
 
           {/* Системные метрики */}
           {sysInfo && <SystemMetricsBar data={sysInfo} />}
+
+          {/* Индексация файлов */}
+          <IndexingFilesPanel />
 
           {/* Контейнеры */}
           <ContainerGroup title="Веб-сервисы" items={coreContainers} />

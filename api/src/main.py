@@ -118,7 +118,7 @@ app.include_router(inventory_sql.router, prefix="/skills")
 app.include_router(norm_control.router, prefix="/skills")
 
 # ── Web API (авторизованные) ─────────────────────────────────────────
-from src.routers import auth_router, chat_router, files_router, system_router, admin_router, models_router  # noqa: E402
+from src.routers import auth_router, chat_router, files_router, system_router, admin_router, models_router, indexing_router  # noqa: E402
 
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
@@ -126,5 +126,6 @@ app.include_router(files_router.router)
 app.include_router(system_router.router)
 app.include_router(models_router.router)
 app.include_router(admin_router.router)
+app.include_router(indexing_router.router)
 from src.routers import settings_router  # noqa: E402
 app.include_router(settings_router.router)

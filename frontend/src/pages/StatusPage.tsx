@@ -210,6 +210,41 @@ export default function StatusPage() {
                 })}
               </div>
             </section>
+
+            {/* Файлы в обработке / с ошибками */}
+            {status.files_with_errors && status.files_with_errors.length > 0 && (
+              <section>
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                  Проблемные файлы
+                </h2>
+                <div className="card divide-y divide-surface-700">
+                  {status.files_with_errors.map((file: any) => (
+                    <div key={file.id} className="px-4 py-3">
+                      <div className="flex items-start gap-3">
+                        {file.status === 'processing' ? (
+                          <Loader2 size={18} className="text-amber-400 shrink-0 animate-spin mt-0.5" />
+                        ) : (
+                          <XCircle size={18} className="text-red-400 shrink-0 mt-0.5" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-200 truncate">{file.filename}</p>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                            <span className="font-mono">{file.folder}</span>
+                            <span>·</span>
+                            <span className={file.status === 'processing' ? 'text-amber-400' : 'text-red-400'}>
+                              {file.status === 'processing' ? 'Индексация...' : 'Ошибка'}
+                            </span>
+                          </div>
+                          {file.error_msg && (
+                            <p className="text-xs text-red-400 mt-1 truncate">{file.error_msg}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         )}
       </div>

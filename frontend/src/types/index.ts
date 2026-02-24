@@ -50,6 +50,7 @@ export type SSEEventType =
 // ─── Files ─────────────────────────────────────────────────────────────
 export type DocumentFolder =
   | 'blueprints'
+  | 'invoices'
   | 'manuals'
   | 'gosts'
   | 'emails'
@@ -90,6 +91,15 @@ export interface SystemStatus {
   vlm_model: string
   embedding_model: string
   reranker_model: string
+  files_with_errors?: Array<{
+    id: string
+    filename: string
+    folder: string
+    status: 'uploaded' | 'processing' | 'indexed' | 'error'
+    error_msg: string | null
+    created_at: string
+    indexed_at: string | null
+  }>
 }
 
 // ─── Models (реестр провайдеров и назначений) ────────────────────────

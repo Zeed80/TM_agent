@@ -33,6 +33,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -49,6 +50,57 @@ logger = logging.getLogger(__name__)
 BLUEPRINTS_DIR = Path(settings.documents_dir) / "blueprints"
 INVOICES_DIR = Path(settings.documents_dir) / "invoices"
 _bm25_model = SparseTextEmbedding("Qdrant/bm25")
+
+
+# ── PostgreSQL функция ────────────────────────────────────────────────────
+
+async def update_file_status(
+    file_path: str,
+    status: str = "indexed",
+    error_msg: str | None = None,
+):
+    """Обновляет статус файла в таблице uploaded_files."""
+    import asyncpg
+
+    try:
+        conn = await asyncpg.connect(settings.postgres_dsn)
+        if status == "indexed":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = NULL, indexed_at = $2
+                WHERE file_path = $3
+                """,
+                status,
+                datetime.now(),
+                file_path,
+            )
+        elif status == "processing":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = NULL
+                WHERE file_path = $2
+                """,
+                status,
+                file_path,
+            )
+        elif status == "error":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = $2, indexed_at = NULL
+                WHERE file_path = $3
+                """,
+                status,
+                error_msg,
+                file_path,
+            )
+        await conn.close()
+        logger.info(f"Обновлён статус файла {file_path}: {status}")
+    except Exception as exc:
+        logger.warning(f"Не удалось обновить статус файла {file_path}: {exc}")
+
 
 # ── VLM промпты ───────────────────────────────────────────────────────
 
@@ -606,6 +658,9 @@ async def main(force_reindex: bool = False) -> None:
 
             logger.info(f"  → VLM анализ: {filepath.name}")
             try:
+                # Обновляем статус на processing
+                await update_file_status(file_path_str, "processing")
+
                 # Шаг 1: Кодируем изображение
                 image_b64 = _encode_image(filepath)
 
@@ -632,6 +687,9 @@ async def main(force_reindex: bool = False) -> None:
                     neo4j_driver, drawing_data, file_path_str, qdrant_chunk_id
                 )
 
+                # Обновляем статус на indexed
+                await update_file_status(file_path_str, "indexed")
+
                 success += 1
                 ops_count = len(drawing_data.get("manufacturing_operations") or [])
                 tools_count = len(drawing_data.get("required_tools") or [])
@@ -642,6 +700,7 @@ async def main(force_reindex: bool = False) -> None:
 
             except Exception as exc:
                 errors += 1
+                await update_file_status(file_path_str, "error", str(exc))
                 logger.error(f"    ✗ Ошибка {filepath.name}: {exc}")
 
         # ── Счета (invoices): только изображения → VLM → Qdrant (без Neo4j) ──
@@ -653,13 +712,21 @@ async def main(force_reindex: bool = False) -> None:
         for filepath in tqdm(invoice_files, desc="Обработка счетов"):
             file_path_str = str(filepath)
             try:
+                # Обновляем статус на processing
+                await update_file_status(file_path_str, "processing")
+
                 image_b64 = _encode_image(filepath)
                 description = await analyze_invoice_via_vlm(image_b64)
                 await save_invoice_to_qdrant(qdrant, description, file_path_str)
+
+                # Обновляем статус на indexed
+                await update_file_status(file_path_str, "indexed")
+
                 success += 1
                 logger.info(f"  ✓ Счёт: {filepath.name}")
             except Exception as exc:
                 errors += 1
+                await update_file_status(file_path_str, "error", str(exc))
                 logger.error(f"  ✗ Ошибка счёта {filepath.name}: {exc}")
 
     finally:

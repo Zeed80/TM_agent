@@ -1,6 +1,6 @@
-import { useState, useRef, DragEvent, ChangeEvent } from 'react'
+import { useState, useRef, DragEvent, ChangeEvent, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Upload, FolderOpen, CheckCircle, AlertCircle, X, FileText, Image, Table, Play } from 'lucide-react'
+import { Upload, FolderOpen, CheckCircle, AlertCircle, X, FileText, Image, Table, Play, Loader2 } from 'lucide-react'
 import { uploadFile, ApiError } from '../api/client'
 import { useAuthStore } from '../store/auth'
 import clsx from 'clsx'
@@ -88,6 +88,9 @@ interface UploadItem {
   progress: number
   message: string
   error: string
+  indexingStatus?: 'uploaded' | 'processing' | 'indexed' | 'error'
+  indexingError?: string
+  fileId?: string
 }
 
 /** Кнопка «Запустить индексацию»: только для admin, запускает ingest-all без ожидания конца. */
@@ -171,9 +174,57 @@ export default function UploadPage() {
   const [selectedFolder, setSelectedFolder] = useState<FolderId>('blueprints')
   const [isDragging, setIsDragging] = useState(false)
   const [uploads, setUploads] = useState<UploadItem[]>([])
+  const [indexingSummary, setIndexingSummary] = useState<{
+    uploaded: number
+    processing: number
+    indexed: number
+    error: number
+  }>({ uploaded: 0, processing: 0, indexed: 0, error: 0 })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const selectedFolderInfo = FOLDERS.find((f) => f.id === selectedFolder)!
+
+  useEffect(() => {
+    const eventSource = new EventSource('/api/v1/files/indexing-status', {
+      withCredentials: true,
+    })
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'status') {
+          setIndexingSummary(data.summary)
+
+          // Обновляем статус в списке загрузок
+          setUploads((prev) =>
+            prev.map((item) => {
+              const fileData = data.files.find((f: any) => f.filename === item.file.name)
+              if (fileData) {
+                return {
+                  ...item,
+                  indexingStatus: fileData.status,
+                  indexingError: fileData.error_msg,
+                  fileId: fileData.id,
+                }
+              }
+              return item
+            }),
+          )
+        }
+      } catch (err) {
+        console.error('Ошибка SSE:', err)
+      }
+    }
+
+    eventSource.onerror = () => {
+      console.error('SSE соединение разорвано')
+      eventSource.close()
+    }
+
+    return () => {
+      eventSource.close()
+    }
+  }, [])
 
   const processFiles = async (files: File[]) => {
     const newItems: UploadItem[] = files.map((f) => ({
@@ -338,6 +389,35 @@ export default function UploadPage() {
               </button>
             </div>
 
+            {/* Сводка индексации */}
+            {indexingSummary && (indexingSummary.indexed > 0 || indexingSummary.processing > 0 || indexingSummary.error > 0) && (
+              <div className="card p-3 mb-3">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  Статус индексации
+                </h3>
+                <div className="flex items-center gap-4 text-xs">
+                  {indexingSummary.indexed > 0 && (
+                    <div className="flex items-center gap-1.5 text-green-400">
+                      <CheckCircle size={14} />
+                      <span>Индексировано: {indexingSummary.indexed}</span>
+                    </div>
+                  )}
+                  {indexingSummary.processing > 0 && (
+                    <div className="flex items-center gap-1.5 text-amber-400">
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>В обработке: {indexingSummary.processing}</span>
+                    </div>
+                  )}
+                  {indexingSummary.error > 0 && (
+                    <div className="flex items-center gap-1.5 text-red-400">
+                      <AlertCircle size={14} />
+                      <span>Ошибок: {indexingSummary.error}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               {uploads.map((item) => (
                 <div key={item.id} className="card px-4 py-3 flex items-center gap-3">
@@ -353,7 +433,7 @@ export default function UploadPage() {
                   {/* Инфо */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-200 truncate">{item.file.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-xs text-slate-500">{formatSize(item.file.size)}</span>
                       {item.status === 'uploading' && (
                         <span className="text-xs text-accent-light">{item.progress}%</span>
@@ -364,7 +444,33 @@ export default function UploadPage() {
                       {item.status === 'error' && (
                         <span className="text-xs text-red-400 truncate">{item.error}</span>
                       )}
+                      {/* Статус индексации */}
+                      {item.indexingStatus && item.indexingStatus !== 'uploaded' && (
+                        <>
+                          {item.indexingStatus === 'processing' && (
+                            <span className="text-xs text-amber-400 flex items-center gap-1">
+                              <Loader2 size={12} className="animate-spin" />
+                              Индексация...
+                            </span>
+                          )}
+                          {item.indexingStatus === 'indexed' && (
+                            <span className="text-xs text-green-400 flex items-center gap-1">
+                              <CheckCircle size={12} />
+                              Индексировано
+                            </span>
+                          )}
+                          {item.indexingStatus === 'error' && (
+                            <span className="text-xs text-red-400 flex items-center gap-1">
+                              <AlertCircle size={12} />
+                              Ошибка индексации
+                            </span>
+                          )}
+                        </>
+                      )}
                     </div>
+                    {item.indexingError && (
+                      <p className="text-xs text-red-400 mt-1 truncate">{item.indexingError}</p>
+                    )}
                     {item.status === 'uploading' && (
                       <div className="mt-1.5 h-0.5 bg-surface-700 rounded-full overflow-hidden">
                         <div

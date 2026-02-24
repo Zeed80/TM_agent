@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from src.auth import get_current_user
@@ -71,6 +72,7 @@ class FileListItem(BaseModel):
     status: str
     error_msg: str | None
     created_at: str
+    indexed_at: str | None = None
 
 
 @router.post("/upload/{folder}", response_model=UploadedFileResponse, status_code=201)
@@ -231,3 +233,82 @@ async def delete_file(
         logger.warning(f"[Files] Не удалось удалить файл с диска: {exc}")
 
     logger.info(f"[Files] Удалён файл: {deleted['filename']}")
+
+
+@router.get("/indexing-status")
+async def get_indexing_status(
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """
+    SSE поток статуса индексации файлов.
+    Стримит события для всех файлов пользователя (или всех для admin).
+    """
+    from fastapi.responses import StreamingResponse
+    import asyncio
+    import json
+
+    is_admin = current_user["role"] == "admin"
+
+    async def _status_generator():
+        """Генератор SSE событий для статуса индексации."""
+        try:
+            last_check = 0
+            while True:
+                await asyncio.sleep(2)  # Проверка каждые 2 секунды
+                last_check += 1
+
+                # Получаем статус файлов
+                base_sql = "SELECT id, filename, folder, status, error_msg, created_at, indexed_at FROM uploaded_files"
+                conditions = []
+                params: dict = {}
+
+                if not is_admin:
+                    conditions.append("user_id = :uid")
+                    params["uid"] = str(current_user["id"])
+
+                if conditions:
+                    base_sql += " WHERE " + " AND ".join(conditions)
+                base_sql += " ORDER BY created_at DESC LIMIT 200"
+
+                rows = await _pg.execute_query(base_sql, params)
+
+                # Группируем по статусам
+                status_summary = {
+                    "uploaded": 0,
+                    "processing": 0,
+                    "indexed": 0,
+                    "error": 0,
+                }
+                files_list = []
+
+                for row in rows:
+                    status = row.get("status", "uploaded")
+                    status_summary[status] = status_summary.get(status, 0) + 1
+
+                    files_list.append({
+                        "id": str(row["id"]),
+                        "filename": row["filename"],
+                        "folder": row["folder"],
+                        "status": status,
+                        "error_msg": row.get("error_msg"),
+                        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+                        "indexed_at": row["indexed_at"].isoformat() if row.get("indexed_at") else None,
+                    })
+
+                yield f"data: {json.dumps({'type': 'status', 'summary': status_summary, 'files': files_list})}\n\n"
+
+        except asyncio.CancelledError:
+            logger.info("[Files] SSE клиент отключился")
+        except Exception as exc:
+            logger.error(f"[Files] Ошибка SSE: {exc}")
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        _status_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

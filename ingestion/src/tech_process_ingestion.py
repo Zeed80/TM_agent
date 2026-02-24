@@ -20,6 +20,7 @@ Tech Process Ingestion — Техпроцессы → граф Neo4j.
 import asyncio
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +33,57 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 TECH_PROCESSES_DIR = Path(settings.documents_dir) / "tech_processes"
+
+
+# ── PostgreSQL функция ────────────────────────────────────────────────────
+
+async def update_file_status(
+    file_path: str,
+    status: str = "indexed",
+    error_msg: str | None = None,
+):
+    """Обновляет статус файла в таблице uploaded_files."""
+    import asyncpg
+
+    try:
+        conn = await asyncpg.connect(settings.postgres_dsn)
+        if status == "indexed":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = NULL, indexed_at = $2
+                WHERE file_path = $3
+                """,
+                status,
+                datetime.now(),
+                file_path,
+            )
+        elif status == "processing":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = NULL
+                WHERE file_path = $2
+                """,
+                status,
+                file_path,
+            )
+        elif status == "error":
+            await conn.execute(
+                """
+                UPDATE uploaded_files
+                SET status = $1, error_msg = $2, indexed_at = NULL
+                WHERE file_path = $3
+                """,
+                status,
+                error_msg,
+                file_path,
+            )
+        await conn.close()
+        logger.info(f"Обновлён статус файла {file_path}: {status}")
+    except Exception as exc:
+        logger.warning(f"Не удалось обновить статус файла {file_path}: {exc}")
+
 
 # Маппинг колонок Excel → внутренние имена
 TECH_PROCESS_COLUMNS = {
@@ -278,13 +330,22 @@ async def main() -> None:
 
     try:
         for filepath in tqdm(files, desc="Техпроцессы"):
+            file_path_str = str(filepath)
             logger.info(f"  → {filepath.name}")
+
             try:
+                # Обновляем статус на processing
+                await update_file_status(file_path_str, "processing")
+
                 ops = await ingest_tech_process_file(driver, filepath)
                 total_ops += ops
                 logger.info(f"    ✓ Операций загружено: {ops}")
+
+                # Обновляем статус на indexed
+                await update_file_status(file_path_str, "indexed")
             except Exception as exc:
                 errors += 1
+                await update_file_status(file_path_str, "error", str(exc))
                 logger.error(f"    ✗ Ошибка {filepath.name}: {exc}")
     finally:
         await driver.close()

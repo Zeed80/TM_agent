@@ -43,6 +43,16 @@ class DiskUsage(BaseModel):
     total_size_mb: float
 
 
+class FileWithStatus(BaseModel):
+    id: str
+    filename: str
+    folder: str
+    status: str  # 'uploaded' | 'processing' | 'indexed' | 'error'
+    error_msg: str | None = None
+    created_at: str
+    indexed_at: str | None = None
+
+
 class SystemStatusResponse(BaseModel):
     services: list[ServiceStatus]
     vram: VRAMStatus
@@ -51,6 +61,7 @@ class SystemStatusResponse(BaseModel):
     vlm_model: str
     embedding_model: str
     reranker_model: str
+    files_with_errors: list[FileWithStatus] | None = None
 
 
 @router.get("/status", response_model=SystemStatusResponse)
@@ -167,6 +178,34 @@ async def system_status(
         else:
             disk_usage.append(DiskUsage(folder=folder_name, files_count=0, total_size_mb=0.0))
 
+    # ── Файлы с ошибками или в обработке ──────────────────────────
+    files_with_errors: list[FileWithStatus] = []
+    try:
+        rows = await postgres_client.execute_query(
+            """
+            SELECT id, filename, folder, status, error_msg, created_at, indexed_at
+            FROM uploaded_files
+            WHERE status IN ('processing', 'error')
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            {},
+        )
+        for row in rows:
+            files_with_errors.append(
+                FileWithStatus(
+                    id=str(row["id"]),
+                    filename=row["filename"],
+                    folder=row["folder"],
+                    status=row["status"],
+                    error_msg=row.get("error_msg"),
+                    created_at=row["created_at"].isoformat() if row.get("created_at") else "",
+                    indexed_at=row["indexed_at"].isoformat() if row.get("indexed_at") else None,
+                )
+            )
+    except Exception as exc:
+        logger.warning(f"[System] Не удалось получить файлы с ошибками: {exc}")
+
     return SystemStatusResponse(
         services=services,
         vram=vram_status,
@@ -175,4 +214,5 @@ async def system_status(
         vlm_model=get_setting("vlm_model"),
         embedding_model=get_setting("embedding_model"),
         reranker_model=get_setting("reranker_model"),
+        files_with_errors=files_with_errors,
     )
